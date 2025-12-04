@@ -1,48 +1,36 @@
 [package]
-name = "parakeet-rs"
-version = "0.2.5"
-edition = "2021"
-authors = ["altunenes"]
+name = "parakeet-cli"
+version = "0.1.0"
+edition = "2024"
 description = "Fast ASR & Speaker Diarization with NVIDIA Parakeet via ONNX"
-repository = "https://github.com/altunenes/parakeet-rs"
+repository = "https://github.com/Stanley5249/parakeet-rs"
 license = "MIT OR Apache-2.0"
-keywords = ["speech-recognition", "asr", "parakeet", "onnx", "nvidia"]
+keywords = ["asr", "nvidia", "onnx", "parakeet", "speech-recognition"]
 categories = ["multimedia::audio", "science"]
 
 [lib]
 name = "parakeet_rs"
 path = "src/lib.rs"
 
-[[example]]
-name = "transcribe"
-path = "examples/transcribe.rs"
-
-[[example]]
-name = "diarization"
-path = "examples/diarization.rs"
-
-[[example]]
-name = "raw"
-path = "examples/raw.rs"
-
-[[example]]
-name = "streaming"
-path = "examples/streaming.rs"
-
 [dependencies]
-ort = { version = "2.0.0-rc.10", features = ["download-binaries", "ndarray"] }
-hound = "3.5"
 eyre = "0.6"
+hf-hub = { version = "0.4", default-features = false, features = [
+  "default-tls",
+  "ureq",
+] }
+hound = "3.5"
 ndarray = "0.16"
-tokenizers = "0.22.1"
+ort = { version = "2.0.0-rc.10", features = ["download-binaries", "ndarray"] }
+rustfft = "6.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rustfft = "6.4"
+tokenizers = "0.22.1"
 
 [dev-dependencies]
 
 [features]
-default = ["cpu"]
+default = ["cpu", "openvino"]
+
 cpu = []
 cuda = ["ort/cuda"]
 tensorrt = ["ort/tensorrt"]
@@ -51,4 +39,5 @@ directml = ["ort/directml"]
 rocm = ["ort/rocm"]
 openvino = ["ort/openvino"]
 webgpu = ["ort/webgpu"]
+
 sortformer = []
