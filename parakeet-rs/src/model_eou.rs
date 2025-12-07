@@ -1,7 +1,6 @@
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use ndarray::{Array1, Array2, Array3, Array4};
-use ort::session::Session;
+use ort::session::{Session, builder::SessionBuilder};
 use std::path::Path;
 
 /// Encoder cache state for streaming inference
@@ -35,7 +34,7 @@ pub struct ParakeetEOUModel {
 impl ParakeetEOUModel {
     pub fn from_pretrained<P: AsRef<Path>>(
         model_dir: P,
-        exec_config: ExecutionConfig,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let model_dir = model_dir.as_ref();
 
@@ -49,15 +48,16 @@ impl ParakeetEOUModel {
             )));
         }
 
-        // Load encoder
-        let builder = Session::builder()?;
-        let builder = exec_config.apply_to_session_builder(builder)?;
-        let encoder = builder.commit_from_file(&encoder_path)?;
+        // Load encoder - clone for first use since we need builder twice
+        let encoder = builder
+            .clone()
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"))
+            .commit_from_file(&encoder_path)?;
 
-        // Load decoder
-        let builder = Session::builder()?;
-        let builder = exec_config.apply_to_session_builder(builder)?;
-        let decoder_joint = builder.commit_from_file(&decoder_path)?;
+        // Load decoder - consume builder on last use (no clone needed)
+        let decoder_joint = builder
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"))
+            .commit_from_file(&decoder_path)?;
 
         Ok(Self {
             encoder,

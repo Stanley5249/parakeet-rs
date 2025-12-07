@@ -1,8 +1,7 @@
 use crate::config::ModelConfig;
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use ndarray::Array2;
-use ort::session::Session;
+use ort::session::{Session, builder::SessionBuilder};
 use std::path::Path;
 
 pub struct ParakeetModel {
@@ -12,21 +11,21 @@ pub struct ParakeetModel {
 
 impl ParakeetModel {
     pub fn from_pretrained<P: AsRef<Path>>(model_path: P) -> Result<Self> {
-        Self::from_pretrained_with_config(model_path, ExecutionConfig::default())
+        Self::from_pretrained_with_builder(model_path, None)
     }
 
-    pub fn from_pretrained_with_config<P: AsRef<Path>>(
+    pub fn from_pretrained_with_builder<P: AsRef<Path>>(
         model_path: P,
-        exec_config: ExecutionConfig,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let model_path = model_path.as_ref();
 
         // Use default config (hardcoded constants for Parakeet-CTC-0.6b: please see: json files https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/tree/main)
         let config = ModelConfig::default();
 
-        let builder = Session::builder()?;
-        let builder = exec_config.apply_to_session_builder(builder)?;
-        let session = builder.commit_from_file(model_path)?;
+        let session = builder
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"))
+            .commit_from_file(model_path)?;
 
         Ok(Self { session, config })
     }

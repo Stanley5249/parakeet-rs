@@ -3,11 +3,11 @@ use crate::config::PreprocessorConfig;
 use crate::decoder::TranscriptionResult;
 use crate::decoder_tdt::ParakeetTDTDecoder;
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use crate::model_tdt::ParakeetTDTModel;
-use crate::timestamps::{process_timestamps, TimestampMode};
+use crate::timestamps::{TimestampMode, process_timestamps};
 use crate::transcriber::Transcriber;
 use crate::vocab::Vocabulary;
+use ort::session::builder::SessionBuilder;
 use std::path::{Path, PathBuf};
 
 /// Parakeet TDT model for multilingual ASR
@@ -19,14 +19,37 @@ pub struct ParakeetTDT {
 }
 
 impl ParakeetTDT {
-    /// Load Parakeet TDT model from path with optional configuration.
+    /// Load Parakeet TDT model from path with optional ORT session builder.
     ///
     /// # Arguments
     /// * `path` - Directory containing encoder-model.onnx, decoder_joint-model.onnx, and vocab.txt
-    /// * `config` - Optional execution configuration (defaults to CPU if None)
+    /// * `builder` - Optional ORT SessionBuilder (defaults to CPU if None)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use parakeet_rs::ParakeetTDT;
+    /// use ort::session::Session;
+    /// use ort::session::builder::GraphOptimizationLevel;
+    /// use ort::execution_providers::{OpenVINOExecutionProvider, CPUExecutionProvider};
+    /// use ort::execution_providers::openvino::OpenVINODeviceType;
+    ///
+    /// // Configure OpenVINO to use GPU with full control
+    /// let builder = Session::builder()?
+    ///     .with_optimization_level(GraphOptimizationLevel::Level3)?
+    ///     .with_intra_threads(4)?
+    ///     .with_execution_providers([
+    ///         OpenVINOExecutionProvider::default()
+    ///             .with_device_type(OpenVINODeviceType::GPU)
+    ///             .build(),
+    ///         CPUExecutionProvider::default().build(),
+    ///     ])?;
+    ///
+    /// let mut model = ParakeetTDT::from_pretrained("./model", Some(builder))?;
+    /// ```
     pub fn from_pretrained<P: AsRef<Path>>(
         path: P,
-        config: Option<ExecutionConfig>,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let path = path.as_ref();
 
@@ -60,9 +83,7 @@ impl ParakeetTDT {
             win_length: 400,
         };
 
-        let exec_config = config.unwrap_or_default();
-
-        let model = ParakeetTDTModel::from_pretrained(path, exec_config)?;
+        let model = ParakeetTDTModel::from_pretrained(path, builder)?;
         let vocab = Vocabulary::from_file(&vocab_path)?;
         let decoder = ParakeetTDTDecoder::from_vocab(vocab);
 

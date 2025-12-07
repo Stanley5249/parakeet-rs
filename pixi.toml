@@ -1,0 +1,23 @@
+[workspace]
+authors = ["Stanley5249 <seer852741@gmail.com>"]
+channels = ["https://prefix.dev/conda-forge"]
+name = "asr"
+platforms = ["win-64", "linux-64"]
+version = "0.1.0"
+
+[target.win-64.activation.env]
+PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\onnxruntime\\capi;%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
+
+[target.linux-64.activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib/site-packages/onnxruntime/capi:$CONDA_PREFIX/lib/site-packages/openvino/libs:$LD_LIBRARY_PATH"
+
+[tasks]
+parakeet = "cargo run -p parakeet-cli -F openvino"
+
+[dependencies]
+python = ">=3.13,<3.14"
+
+[pypi-dependencies]
+openvino = ">=2025.1.0,<2025.2"
+onnxruntime = ">=1.22.0,<1.23"
+onnxruntime-openvino = ">=1.22.0,<1.23"

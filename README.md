@@ -5,6 +5,13 @@
 Fast speech recognition with NVIDIA's Parakeet models via ONNX Runtime.
 Note: CoreML doesn't stable with this model - stick w/ CPU (or other GPU EP like CUDA). But its incredible fast in my Mac M3 16gb' CPU compared to Whisper metal! :-)
 
+## Workspace Structure
+
+This project is organized as a Cargo workspace:
+
+- **`parakeet-rs/`** - Core library crate (no execution provider features)
+- **`parakeet-cli/`** - CLI binary with configurable execution provider features
+
 ## Models
 
 **CTC (English-only)**: Fast & accurate
@@ -77,6 +84,69 @@ for seg in segments {
 ```
 See `examples/diarization.rs` for combining with TDT transcription.
 
+## GPU Acceleration (Direct ONNX Runtime Control)
+
+The library provides direct access to ONNX Runtime's `SessionBuilder`, giving you full control over execution providers and configuration:
+
+```rust
+use parakeet_rs::ParakeetTDT;
+use ort::session::Session;
+use ort::session::builder::GraphOptimizationLevel;
+use ort::execution_providers::{
+    OpenVINOExecutionProvider, CUDAExecutionProvider, CPUExecutionProvider,
+};
+
+// OpenVINO with GPU - specify device type and optimization level
+let builder = Session::builder()?
+    .with_optimization_level(GraphOptimizationLevel::Level3)?
+    .with_intra_threads(4)?
+    .with_execution_providers([
+        OpenVINOExecutionProvider::default()
+            .with_device_type("GPU")  // "CPU", "GPU", "GPU.0", "NPU", etc.
+            .build(),
+        CPUExecutionProvider::default().build(),
+    ])?;
+
+let mut model = ParakeetTDT::from_pretrained("./tdt", Some(builder))?;
+
+// CUDA with specific device ID
+let builder = Session::builder()?
+    .with_optimization_level(GraphOptimizationLevel::Level3)?
+    .with_intra_threads(4)?
+    .with_execution_providers([
+        CUDAExecutionProvider::default()
+            .with_device_id(0)
+            .build(),
+        CPUExecutionProvider::default().build(),
+    ])?;
+
+let mut model = ParakeetTDT::from_pretrained("./tdt", Some(builder))?;
+```
+
+### Using the CLI
+
+The CLI binary supports feature flags for different execution providers:
+
+```bash
+# Build with OpenVINO support
+cargo build -p parakeet-cli --features openvino --release
+
+# Build with CUDA support
+cargo build -p parakeet-cli --features cuda --release
+
+# Run
+./target/release/parakeet audio.wav
+```
+
+Available features for `parakeet-cli`:
+- `cpu` (default)
+- `cuda`
+- `tensorrt`
+- `coreml`
+- `directml`
+- `rocm`
+- `openvino`
+- `webgpu`
 
 ## Setup
 
@@ -90,23 +160,24 @@ See `examples/diarization.rs` for combining with TDT transcription.
 
 Quantized versions available (int8). All files must be in the same directory.
 
-GPU support (auto-falls back to CPU if fails):
+## Library Usage
+
+Add to your `Cargo.toml`:
+
 ```toml
-parakeet-rs = { version = "0.1", features = ["cuda"] }  # or tensorrt, webgpu, directml, rocm
+[dependencies]
+parakeet-rs = "0.1"
+
+# For CUDA support, add ort with cuda feature
+ort = { version = "2.0.0-rc.10", features = ["cuda"] }
 ```
 
-```rust
-use parakeet_rs::{Parakeet, ExecutionConfig, ExecutionProvider};
-
-let config = ExecutionConfig::new().with_execution_provider(ExecutionProvider::Cuda);
-let mut parakeet = Parakeet::from_pretrained(".", Some(config))?;
-```
-
+The library itself has no execution provider features - your application enables them via the `ort` dependency.
 
 ## Features
 
 - [CTC: English with punctuation & capitalization](https://huggingface.co/nvidia/parakeet-ctc-0.6b)
-- [TDT: Multilingual (auto lang detection) ](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+- [TDT: Multilingual (auto lang detection)](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
 - [EOU: Streaming ASR with end-of-utterance detection](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1)
 - [Sortformer v2 & v2.1: Streaming speaker diarization (up to 4 speakers)](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2) NOTE: you can also download v2.1 model same way.
 - Token-level timestamps (CTC, TDT)
@@ -114,6 +185,7 @@ let mut parakeet = Parakeet::from_pretrained(".", Some(config))?;
 ## Notes
 
 - Audio: 16kHz mono WAV (16-bit PCM or 32-bit float)
+- CoreML currently unstable with this model - use CPU or other GPU providers
 
 ## License
 

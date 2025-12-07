@@ -20,10 +20,9 @@
 //! Note, my stft code is adapted from: https://librosa.org/doc/main/generated/librosa.stft.html
 
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig;
-use ndarray::{s, Array1, Array2, Array3, Axis};
-use ort::session::Session;
-use rustfft::{num_complex::Complex, FftPlanner};
+use ndarray::{Array1, Array2, Array3, Axis, s};
+use ort::session::{Session, builder::SessionBuilder};
+use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
 use std::path::Path;
 
@@ -188,18 +187,16 @@ impl Sortformer {
         Self::with_config(model_path, None, DiarizationConfig::default())
     }
 
-    /// Create with custom config
+    /// Create with custom config and optional SessionBuilder
     pub fn with_config<P: AsRef<Path>>(
         model_path: P,
-        execution_config: Option<ModelConfig>,
+        builder: Option<SessionBuilder>,
         config: DiarizationConfig,
     ) -> Result<Self> {
-        let config_to_use = execution_config.unwrap_or_default();
+        let builder = builder
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"));
 
-        let session = config_to_use
-            .apply_to_session_builder(Session::builder()?)?
-            .commit_from_file(model_path.as_ref())?;
-
+        let session = builder.commit_from_file(model_path.as_ref())?;
         let mel_basis = Self::create_mel_filterbank();
 
         let mut instance = Self {

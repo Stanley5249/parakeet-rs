@@ -1,7 +1,6 @@
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use ndarray::{Array1, Array2, Array3};
-use ort::session::Session;
+use ort::session::{Session, builder::SessionBuilder};
 use std::path::{Path, PathBuf};
 
 /// TDT model configs
@@ -26,7 +25,7 @@ impl ParakeetTDTModel {
     /// Load TDT model from directory containing encoder and decoder_joint ONNX files
     pub fn from_pretrained<P: AsRef<Path>>(
         model_dir: P,
-        exec_config: ExecutionConfig,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let model_dir = model_dir.as_ref();
 
@@ -36,15 +35,16 @@ impl ParakeetTDTModel {
 
         let config = TDTModelConfig::default();
 
-        // Load encoder
-        let builder = Session::builder()?;
-        let builder = exec_config.apply_to_session_builder(builder)?;
-        let encoder = builder.commit_from_file(&encoder_path)?;
+        // Load encoder - use builder or create new one
+        let encoder = builder
+            .clone()
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"))
+            .commit_from_file(&encoder_path)?;
 
         // Load decoder_joint
-        let builder = Session::builder()?;
-        let builder = exec_config.apply_to_session_builder(builder)?;
-        let decoder_joint = builder.commit_from_file(&decoder_joint_path)?;
+        let decoder_joint = builder
+            .unwrap_or_else(|| Session::builder().expect("Failed to create session builder"))
+            .commit_from_file(&decoder_joint_path)?;
 
         Ok(Self {
             encoder,
@@ -69,10 +69,11 @@ impl ParakeetTDTModel {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    if name.starts_with("encoder") && name.ends_with(".onnx") {
-                        return Ok(path);
-                    }
+                if let Some(name) = path.file_name().and_then(|s| s.to_str())
+                    && name.starts_with("encoder")
+                    && name.ends_with(".onnx")
+                {
+                    return Ok(path);
                 }
             }
         }
@@ -81,7 +82,6 @@ impl ParakeetTDTModel {
             dir.display()
         )))
     }
-
 
     fn find_decoder_joint(dir: &Path) -> Result<PathBuf> {
         let candidates = [

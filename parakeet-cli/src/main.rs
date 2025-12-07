@@ -1,12 +1,22 @@
 //! Parakeet CLI - Speech-to-text transcription tool
 
 use hf_hub::api::sync::Api;
-use hound;
-use parakeet_rs::{ExecutionConfig, ExecutionProvider, ParakeetTDT, TimestampMode, Transcriber};
+use ort::execution_providers::ExecutionProviderDispatch;
+use ort::session::Session;
+use parakeet_rs::{ParakeetTDT, TimestampMode, Transcriber};
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
+
+#[cfg(feature = "openvino")]
+use ort::execution_providers::OpenVINOExecutionProvider;
+
+#[cfg(feature = "cuda")]
+use ort::execution_providers::CUDAExecutionProvider;
+
+#[cfg(not(any(feature = "openvino", feature = "cuda")))]
+use ort::execution_providers::CPUExecutionProvider;
 
 const MODEL_ID: &str = "istupakov/parakeet-tdt-0.6b-v3-onnx";
 const MODEL_FILES: &[&str] = &[
@@ -86,14 +96,61 @@ fn fetch_model() -> eyre::Result<PathBuf> {
     for file in files {
         repo.get(file)?;
     }
-    
+
     Ok(path)
 }
 
 fn load_model(model_dir: &PathBuf) -> eyre::Result<ParakeetTDT> {
     println!("Loading model from: {}", model_dir.display());
-    let config = ExecutionConfig::new().with_execution_provider(ExecutionProvider::OpenVINO);
-    Ok(ParakeetTDT::from_pretrained(model_dir, Some(config))?)
+
+    // Configure execution providers directly with full control
+    // The order matters: first available provider will be used
+    let builder = Session::builder()?.with_execution_providers(build_execution_providers())?;
+
+    Ok(ParakeetTDT::from_pretrained(model_dir, Some(builder))?)
+}
+
+/// Build execution providers based on enabled features.
+///
+/// This demonstrates the new direct ORT provider configuration:
+/// - You have full control over provider settings (device type, device ID, etc.)
+/// - Providers are tried in order; first available one is used
+/// - Always include CPU as fallback
+fn build_execution_providers() -> Vec<ExecutionProviderDispatch> {
+    // OpenVINO with configurable device support (when feature is enabled)
+    #[cfg(feature = "openvino")]
+    {
+        // Get device type from environment variable or use default "CPU"
+        // Supported: "CPU", "GPU", "GPU.0", "GPU.1", "NPU", "AUTO:GPU,CPU", etc.
+        let device_type = env::var("OPENVINO_DEVICE").unwrap_or_else(|_| "CPU".to_string());
+        println!("  Configuring OpenVINO provider (device: {})", device_type);
+
+        // Return OpenVINO provider with CPU fallback
+        // If OpenVINO EP DLLs are not found at runtime, it will fallback to CPU
+        return vec![
+            OpenVINOExecutionProvider::default()
+                .with_device_type(device_type)
+                .build()
+                .error_on_failure(),
+        ];
+    }
+
+    // CUDA support (when feature is enabled)
+    #[cfg(feature = "cuda")]
+    {
+        println!("  Attempting CUDA provider");
+        return vec![
+            CUDAExecutionProvider::default().with_device_id(0).build(),
+            CPUExecutionProvider::default().build(),
+        ];
+    }
+
+    // Default: CPU provider
+    #[cfg(not(any(feature = "openvino", feature = "cuda")))]
+    {
+        println!("  CPU provider enabled");
+        vec![CPUExecutionProvider::default().build().error_on_failure()]
+    }
 }
 
 fn transcribe(

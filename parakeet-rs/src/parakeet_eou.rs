@@ -1,8 +1,8 @@
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use crate::model_eou::{EncoderCache, ParakeetEOUModel};
-use ndarray::{s, Array2, Array3};
-use rustfft::{num_complex::Complex, FftPlanner};
+use ndarray::{Array2, Array3, s};
+use ort::session::builder::SessionBuilder;
+use rustfft::{FftPlanner, num_complex::Complex};
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 use std::path::Path;
@@ -35,14 +35,14 @@ pub struct ParakeetEOU {
 }
 
 impl ParakeetEOU {
-    /// Load Parakeet EOU model from path
+    /// Load Parakeet EOU model from path with optional ORT session builder.
     ///
     /// # Arguments
     /// * `path` - Directory containing encoder.onnx, decoder_joint.onnx, and tokenizer.json
-    /// * `config` - Optional execution configuration (defaults to CPU if None)
+    /// * `builder` - Optional ORT SessionBuilder (defaults to CPU if None)
     pub fn from_pretrained<P: AsRef<Path>>(
         path: P,
-        config: Option<ExecutionConfig>,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let path = path.as_ref();
         let tokenizer_path = path.join("tokenizer.json");
@@ -57,8 +57,7 @@ impl ParakeetEOU {
             .map(|id| id as i32)
             .unwrap_or(1024);
 
-        let exec_config = config.unwrap_or_default();
-        let model = ParakeetEOUModel::from_pretrained(path, exec_config)?;
+        let model = ParakeetEOUModel::from_pretrained(path, builder)?;
 
         // Buffer size: 4 seconds of audio
         // Provides long history for feature extraction context

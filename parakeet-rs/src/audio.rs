@@ -46,7 +46,7 @@ fn hann_window(window_length: usize) -> Vec<f32> {
 // and the model outputs all blank tokens. RustFFT gives us O(n log n) performance
 // and numerically correct results that match what the model expects.
 pub fn stft(audio: &[f32], n_fft: usize, hop_length: usize, win_length: usize) -> Array2<f32> {
-    use rustfft::{num_complex::Complex, FftPlanner};
+    use rustfft::{FftPlanner, num_complex::Complex};
 
     let window = hann_window(win_length);
     let num_frames = (audio.len() - win_length) / hop_length + 1;

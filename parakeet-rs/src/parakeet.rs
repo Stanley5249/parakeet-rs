@@ -2,10 +2,10 @@ use crate::audio;
 use crate::config::PreprocessorConfig;
 use crate::decoder::{ParakeetDecoder, TranscriptionResult};
 use crate::error::{Error, Result};
-use crate::execution::ModelConfig as ExecutionConfig;
 use crate::model::ParakeetModel;
-use crate::timestamps::{process_timestamps, TimestampMode};
+use crate::timestamps::{TimestampMode, process_timestamps};
 use crate::transcriber::Transcriber;
+use ort::session::builder::SessionBuilder;
 use std::path::{Path, PathBuf};
 
 pub struct Parakeet {
@@ -16,11 +16,11 @@ pub struct Parakeet {
 }
 
 impl Parakeet {
-    /// Load Parakeet model from path with optional configuration.
+    /// Load Parakeet model from path with optional ORT session builder.
     ///
     /// # Arguments
     /// * `path` - Directory containing model files, or path to specific model file
-    /// * `config` - Optional execution configuration (defaults to CPU if None)
+    /// * `builder` - Optional ORT SessionBuilder (defaults to CPU if None)
     ///
     /// # Examples
     /// ```no_run
@@ -34,11 +34,27 @@ impl Parakeet {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     ///
-    /// For GPU acceleration, enable the corresponding feature (cuda, tensorrt, webgpu, etc.)
-    /// and pass an `ExecutionConfig` with the desired execution provider.
+    /// For GPU acceleration, pass a configured `SessionBuilder`:
+    ///
+    /// ```ignore
+    /// use parakeet_rs::Parakeet;
+    /// use ort::session::Session;
+    /// use ort::session::builder::GraphOptimizationLevel;
+    /// use ort::execution_providers::{CUDAExecutionProvider, CPUExecutionProvider};
+    ///
+    /// let builder = Session::builder()?
+    ///     .with_optimization_level(GraphOptimizationLevel::Level3)?
+    ///     .with_intra_threads(4)?
+    ///     .with_execution_providers([
+    ///         CUDAExecutionProvider::default().build(),
+    ///         CPUExecutionProvider::default().build(),
+    ///     ])?;
+    ///
+    /// let parakeet = Parakeet::from_pretrained(".", Some(builder))?;
+    /// ```
     pub fn from_pretrained<P: AsRef<Path>>(
         path: P,
-        config: Option<ExecutionConfig>,
+        builder: Option<SessionBuilder>,
     ) -> Result<Self> {
         let path = path.as_ref();
 
@@ -71,9 +87,8 @@ impl Parakeet {
         }
 
         let preprocessor_config = PreprocessorConfig::default();
-        let exec_config = config.unwrap_or_default();
 
-        let model = ParakeetModel::from_pretrained_with_config(&model_path, exec_config)?;
+        let model = ParakeetModel::from_pretrained_with_builder(&model_path, builder)?;
         let decoder = ParakeetDecoder::from_pretrained(&tokenizer_path)?;
 
         Ok(Self {

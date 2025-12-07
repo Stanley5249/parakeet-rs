@@ -1220,6 +1220,17 @@ dependencies = [
  "eyre",
  "hf-hub",
  "hound",
+ "ort",
+ "parakeet-rs",
+]
+
+[[package]]
+name = "parakeet-rs"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "hf-hub",
+ "hound",
  "ndarray",
  "ort",
  "rustfft",

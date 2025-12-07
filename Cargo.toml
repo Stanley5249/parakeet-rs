@@ -1,18 +1,15 @@
-[package]
-name = "parakeet-cli"
+[workspace]
+resolver = "2"
+members = ["parakeet-rs", "parakeet-cli"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
-description = "Fast ASR & Speaker Diarization with NVIDIA Parakeet via ONNX"
 repository = "https://github.com/Stanley5249/parakeet-rs"
 license = "MIT OR Apache-2.0"
-keywords = ["asr", "nvidia", "onnx", "parakeet", "speech-recognition"]
-categories = ["multimedia::audio", "science"]
 
-[lib]
-name = "parakeet_rs"
-path = "src/lib.rs"
-
-[dependencies]
+[workspace.dependencies]
+parakeet-rs = { path = "parakeet-rs" }
 eyre = "0.6"
 hf-hub = { version = "0.4", default-features = false, features = [
   "default-tls",
@@ -20,24 +17,8 @@ hf-hub = { version = "0.4", default-features = false, features = [
 ] }
 hound = "3.5"
 ndarray = "0.16"
-ort = { version = "2.0.0-rc.10", features = ["download-binaries", "ndarray"] }
+ort = { version = "2.0.0-rc.10", features = ["ndarray"] }
 rustfft = "6.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokenizers = "0.22.1"
-
-[dev-dependencies]
-
-[features]
-default = ["cpu", "openvino"]
-
-cpu = []
-cuda = ["ort/cuda"]
-tensorrt = ["ort/tensorrt"]
-coreml = ["ort/coreml"]
-directml = ["ort/directml"]
-rocm = ["ort/rocm"]
-openvino = ["ort/openvino"]
-webgpu = ["ort/webgpu"]
-
-sortformer = []
