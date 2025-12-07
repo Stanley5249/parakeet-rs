@@ -73,14 +73,21 @@ fn fetch_model() -> eyre::Result<PathBuf> {
     let api = Api::new()?;
     let repo = api.model(MODEL_ID.to_string());
 
-    for file in MODEL_FILES {
-        repo.get(file)?;
-    }
+    let (first, files) = MODEL_FILES
+        .split_first()
+        .ok_or_else(|| eyre::eyre!("No model files specified"))?;
 
-    repo.get(MODEL_FILES[0])?
+    let path = repo
+        .get(first)?
         .parent()
         .map(|p| p.to_path_buf())
-        .ok_or_else(|| eyre::eyre!("Failed to get model directory"))
+        .ok_or_else(|| eyre::eyre!("Failed to get model directory"))?;
+
+    for file in files {
+        repo.get(file)?;
+    }
+    
+    Ok(path)
 }
 
 fn load_model(model_dir: &PathBuf) -> eyre::Result<ParakeetTDT> {
