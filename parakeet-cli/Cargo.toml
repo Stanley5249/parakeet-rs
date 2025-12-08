@@ -21,6 +21,9 @@ hound.workspace = true
 # Re-export ort for direct provider configuration
 ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
 
+# Logging
+tracing-subscriber = { version = "0.3", features = [ "env-filter", "fmt" ] }
+
 [features]
 default = ["cpu"]
 

@@ -27,6 +27,8 @@ const MODEL_FILES: &[&str] = &[
 ];
 
 fn main() -> ExitCode {
+    tracing_subscriber::fmt::init();
+
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

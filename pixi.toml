@@ -5,6 +5,9 @@ name = "asr"
 platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
+[activation.env]
+RUST_LOG = "ort=debug"
+
 [target.win-64.activation.env]
 PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\onnxruntime\\capi;%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
 
