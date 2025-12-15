@@ -1,77 +1,71 @@
 // Build script for parakeet-cli
-// Symlinks ONNX Runtime and OpenVINO DLLs from pixi environment when openvino feature is enabled
+// Symlinks ONNX Runtime and Executor Provider DLLs from Conda enviroment to target dir
+#![allow(dead_code)]
+
+use std::env;
+use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
+const ORT_DYLIBS: [&str; 2] = [
+    "onnxruntime_providers_openvino.dll",
+    "onnxruntime_providers_shared.dll",
+];
+
+#[cfg(target_os = "linux")]
+const ORT_DYLIBS: [&str; 1] = ["libonnxruntime_providers_openvino.so"];
 
 fn main() {
     // println!("cargo:rerun-if-changed=build.rs");
 
-    #[cfg(feature = "openvino")]
-    if let Err(e) = setup_openvino_ep() {
-        println!("cargo:warning=Failed to setup OpenVINO EP: {}", e);
+    #[cfg(any(feature = "openvino"))]
+    if let Err(e) = symlink_ort_providers() {
+        println!(
+            "cargo:error=Failed to symlink ONNX Runtime providers: {}",
+            e
+        );
     }
 }
 
-#[cfg(feature = "openvino")]
-fn setup_openvino_ep() -> std::io::Result<()> {
-    use std::{env, fs, path::PathBuf};
+fn get_target_dir() -> PathBuf {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+    out_dir
+        .ancestors()
+        .nth(3)
+        .expect("Invalid OUT_DIR")
+        .to_path_buf()
+}
 
-    // // Find workspace root
-    let workspace_root = env::var("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| env::current_dir().unwrap());
+fn symlink_ort_providers() -> std::io::Result<()> {
+    // ONNX Runtime providers DLLs from conda environment
 
-    // // ONNX Runtime DLLs from pixi Python package (onnxruntime-openvino)
-    let onnxruntime_capi = workspace_root
-        .join(".pixi")
-        .join("envs")
-        .join("default")
+    let conda_prefix = PathBuf::from(env::var("CONDA_PREFIX").expect("CONDA_PREFIX not set"));
+
+    let ort_dir = conda_prefix
         .join("Lib")
         .join("site-packages")
         .join("onnxruntime")
         .join("capi");
 
-    // // Target directory for symlinks
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
-    let target_dir = out_dir.ancestors().nth(3).expect("Invalid OUT_DIR");
-    fs::create_dir_all(target_dir)?;
+    let target_dir = get_target_dir();
 
-    // // Required ONNX Runtime DLLs from Python package
-    let onnxruntime_dlls = [
-        "onnxruntime_providers_openvino.dll",
-        #[cfg(target_os = "windows")]
-        "onnxruntime_providers_shared.dll",
-    ];
-
-    // // Symlink ONNX Runtime DLLs
-    for dll_name in &onnxruntime_dlls {
-        let src = onnxruntime_capi.join(dll_name);
-        let dst = target_dir.join(dll_name);
-
-        if !src.exists() {
-            println!("cargo:warning=DLL not found: {}", src.display());
-            continue;
-        }
-
+    for dylib in ORT_DYLIBS {
+        let src = ort_dir.join(dylib);
+        let dst = target_dir.join(dylib);
         symlink_dll(&src, &dst)?;
     }
+
+    println!("cargo:rerun-if-changed={}", ort_dir.display());
+    println!("cargo:rerun-if-env-changed=CONDA_PREFIX");
 
     Ok(())
 }
 
-#[allow(dead_code)]
-fn symlink_dll(_src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    use std::fs;
+fn symlink_dll(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    std::os::windows::fs::symlink_file(src, dst)?;
 
-    if dst.exists() || dst.symlink_metadata().is_ok() {
-        let _ = fs::remove_file(dst);
-    }
-
-    #[cfg(all(feature = "openvino", target_os = "windows"))]
-    std::os::windows::fs::symlink_file(_src, dst)?;
-
-    #[cfg(all(feature = "openvino", target_os = "linux"))]
-    std::os::unix::fs::symlink(_src, dst)?;
+    #[cfg(target_os = "linux")]
+    std::os::unix::fs::symlink(src, dst)?;
 
     Ok(())
 }

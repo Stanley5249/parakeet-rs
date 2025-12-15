@@ -8,19 +8,26 @@ version = "0.1.0"
 [activation.env]
 RUST_LOG = "ort=debug"
 
-[target.win-64.activation.env]
-PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\onnxruntime\\capi;%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
-
-[target.linux-64.activation.env]
-LD_LIBRARY_PATH = "$CONDA_PREFIX/lib/site-packages/onnxruntime/capi:$CONDA_PREFIX/lib/site-packages/openvino/libs:$LD_LIBRARY_PATH"
-
 [tasks]
+parakeet = "cargo run -p parakeet-cli"
+
+# OpenVINO Feature
+[feature.openvino.target.win-64.activation.env]
+PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
+
+[feature.openvino.target.linux-64.activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib/site-packages/openvino/libs:$LD_LIBRARY_PATH"
+
+[feature.openvino.tasks]
 parakeet = "cargo run -p parakeet-cli -F openvino"
 
-[dependencies]
+[feature.openvino.dependencies]
 python = ">=3.13,<3.14"
 
-[pypi-dependencies]
-openvino = ">=2025.1.0,<2025.2"
+[feature.openvino.pypi-dependencies]
 onnxruntime = ">=1.22.0,<1.23"
+openvino = ">=2025.1.0,<2025.2"
 onnxruntime-openvino = ">=1.22.0,<1.23"
+
+[environments]
+openvino = ["openvino"]
