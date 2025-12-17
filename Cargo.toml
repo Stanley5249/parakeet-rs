@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["parakeet-rs", "parakeet-cli"]
+members = ["parakeet-rs", "parakeet-cli", "melops-dl"]
 
 [workspace.package]
 version = "0.1.0"

@@ -11,6 +11,7 @@ This project is organized as a Cargo workspace:
 
 - **`parakeet-rs/`** - Core library crate (no execution provider features)
 - **`parakeet-cli/`** - CLI binary with configurable execution provider features
+- **`melops-dl/`** - Minimal yt-dlp wrapper for downloading and organizing audio by metadata
 
 ## Models
 
