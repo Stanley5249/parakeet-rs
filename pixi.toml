@@ -1,7 +1,7 @@
 [workspace]
 authors = ["Stanley5249 <seer852741@gmail.com>"]
 channels = ["https://prefix.dev/conda-forge"]
-name = "asr"
+name = "melops"
 platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
@@ -10,6 +10,9 @@ RUST_LOG = "ort=debug"
 
 [tasks]
 parakeet = "cargo run -p parakeet-cli"
+
+test = "cargo test --workspace"
+test-ignored = "cargo test --workspace -- --ignored --no-capture"
 
 [dependencies]
 rust = ">=1.92.0,<1.93"

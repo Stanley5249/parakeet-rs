@@ -5,16 +5,21 @@
 //! ```no_run
 //! use melops_dl::{dl::download, asr::AudioFormat};
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! download(&["https://youtube.com/watch?v=example"], AudioFormat::Pcm16.into())?;
+//! let info = download("https://youtube.com/watch?v=example", AudioFormat::Pcm16.into())?;
+//! println!("Downloaded: {}", info.title);
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! **Output:** `downloads/domain/uploader/title.wav` + `title.info.json`
+//! **Output:** `downloads/Extractor/uploader/title/title.wav` + `title.info.json`
 
-use crate::dl::{DlOptions, OutputTemplates, Paths, PostProcessor, PostProcessorArgs};
+use crate::dl::{DownloadOptions, OutputPaths, OutputTemplates, PostProcessor, PostProcessorArgs};
 
-/// 16kHz mono WAV format (pcm_s16le or pcm_f32le).
+/// Output template for ASR: `Extractor/uploader/title/title.ext`
+pub const ASR_OUTPUT_TEMPLATE: &str =
+    "%(extractor_key,extractor)s/%(uploader,uploader_id)s/%(title)s/%(title)s.%(ext)s";
+
+/// 16kHz mono WAV format (`pcm_s16le` or `pcm_f32le`).
 #[derive(Copy, Clone, Debug, Default)]
 pub enum AudioFormat {
     /// 16-bit PCM (standard, smaller files)
@@ -27,7 +32,7 @@ pub enum AudioFormat {
 impl From<AudioFormat> for PostProcessorArgs {
     /// FFmpeg args: `-ar 16000 -ac 1 -c:a pcm_s16le` (Pcm16) or `pcm_f32le` (Float32)
     fn from(format: AudioFormat) -> Self {
-        let extract_audio = match format {
+        let ffmpeg = match format {
             AudioFormat::Pcm16 => vec![
                 "-ar".to_string(),
                 "16000".to_string(), // 16kHz sample rate
@@ -45,26 +50,26 @@ impl From<AudioFormat> for PostProcessorArgs {
                 "pcm_f32le".to_string(), // 32-bit float PCM
             ],
         };
-        Self { extract_audio }
+        Self { ffmpeg }
     }
 }
 
-impl From<AudioFormat> for DlOptions {
-    /// ASR preset: best audio → 16kHz mono WAV, organized by `domain/uploader/title`, saves `.info.json`
+impl From<AudioFormat> for DownloadOptions {
+    /// ASR preset: best audio → 16kHz mono WAV, organized by `Extractor/uploader/title`, saves `.info.json`
     fn from(format: AudioFormat) -> Self {
         Self {
             format: Some("ba".to_string()),
-            paths: Some(Paths::system_default()),
-            outtmpl: Some(OutputTemplates::default()),
+            paths: Some(OutputPaths::system_default()),
+            outtmpl: Some(OutputTemplates::simple(ASR_OUTPUT_TEMPLATE.to_string())),
             postprocessors: Some(vec![PostProcessor {
                 key: "FFmpegExtractAudio".to_string(),
                 preferredcodec: Some("wav".to_string()),
             }]),
             postprocessor_args: Some(format.into()),
             writeinfojson: Some(true),
-            getcomments: Some(true),
-            quiet: Some(true),
-            no_warnings: Some(true),
+            getcomments: None,
+            quiet: None,
+            no_warnings: None,
         }
     }
 }
@@ -74,52 +79,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_audio_format_to_postprocessor_args_pcm16() {
-        let format = AudioFormat::Pcm16;
-        let args: PostProcessorArgs = format.into();
-
+    fn postprocessor_args_pcm16() {
+        let args: PostProcessorArgs = AudioFormat::Pcm16.into();
         assert_eq!(
-            args.extract_audio,
+            args.ffmpeg,
             vec!["-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"]
         );
     }
 
     #[test]
-    fn test_audio_format_to_postprocessor_args_float32() {
-        let format = AudioFormat::Float32;
-        let args = PostProcessorArgs::from(format);
-
+    fn postprocessor_args_float32() {
+        let args: PostProcessorArgs = AudioFormat::Float32.into();
         assert_eq!(
-            args.extract_audio,
+            args.ffmpeg,
             vec!["-ar", "16000", "-ac", "1", "-c:a", "pcm_f32le"]
         );
     }
 
     #[test]
-    #[allow(unused_variables)] // false positive suppression
-    fn test_audio_format_to_dl_options() {
-        let opts: DlOptions = AudioFormat::Pcm16.into();
-        let format = "ba".to_string();
+    fn dl_options_from_audio_format() {
+        let opts: DownloadOptions = AudioFormat::Pcm16.into();
 
         assert!(matches!(
             opts,
-            DlOptions {
-                format: Some(format),
+            DownloadOptions {
+                format: Some(_),
                 paths: Some(_),
                 outtmpl: Some(_),
                 postprocessors: Some(_),
                 postprocessor_args: Some(_),
                 writeinfojson: Some(true),
-                getcomments: Some(true),
-                quiet: Some(true),
-                no_warnings: Some(true),
+                getcomments: None,
+                quiet: None,
+                no_warnings: None,
             }
         ));
+
+        assert_eq!(opts.format, Some("ba".to_string()));
     }
 
     #[test]
-    fn test_audio_format_default() {
-        let format = AudioFormat::default();
-        assert!(matches!(format, AudioFormat::Pcm16));
+    fn audio_format_default() {
+        assert!(matches!(AudioFormat::default(), AudioFormat::Pcm16));
     }
 }

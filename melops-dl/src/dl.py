@@ -5,13 +5,19 @@ from typing import Any
 from yt_dlp import YoutubeDL
 
 
-def download(urls: list[str], params: dict[str, Any]) -> None:
+def download(url: str, params: dict[str, Any]) -> dict[str, Any]:
     """
-    Download videos using yt-dlp with specified parameters.
+    Download a single video and return its info dict.
+
+    Uses extract_info with download=True to download and get metadata in one request.
 
     Args:
-        urls: List of video URLs supported by yt-dlp
+        url: Video URL supported by yt-dlp
         params: Dictionary of parameters for yt-dlp
+
+    Returns:
+        Sanitized info dict (JSON-serializable)
     """
     with YoutubeDL(params) as ydl:
-        ydl.download(urls)
+        info = ydl.extract_info(url, download=True)
+        return ydl.sanitize_info(info)
