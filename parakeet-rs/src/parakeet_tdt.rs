@@ -4,7 +4,7 @@ use crate::decoder::TranscriptionResult;
 use crate::decoder_tdt::ParakeetTDTDecoder;
 use crate::error::{Error, Result};
 use crate::model_tdt::ParakeetTDTModel;
-use crate::timestamps::{TimestampMode, process_timestamps};
+use crate::timestamps::{process_timestamps, TimestampMode};
 use crate::transcriber::Transcriber;
 use crate::vocab::Vocabulary;
 use ort::session::builder::SessionBuilder;
@@ -83,8 +83,11 @@ impl ParakeetTDT {
             win_length: 400,
         };
 
-        let model = ParakeetTDTModel::from_pretrained(path, builder)?;
+        // Load vocab first to get the actual vocabulary size
         let vocab = Vocabulary::from_file(&vocab_path)?;
+        let vocab_size = vocab.size();
+
+        let model = ParakeetTDTModel::from_pretrained(path, builder, vocab_size)?;
         let decoder = ParakeetTDTDecoder::from_vocab(vocab);
 
         Ok(Self {
@@ -129,12 +132,22 @@ impl Transcriber for ParakeetTDT {
         result.tokens = process_timestamps(&result.tokens, mode);
 
         // Rebuild full text from processed tokens
-        result.text = result
-            .tokens
-            .iter()
-            .map(|t| t.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
+        result.text = if mode == TimestampMode::Tokens {
+            result
+                .tokens
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<String>()
+                .trim()
+                .to_string()
+        } else {
+            result
+                .tokens
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
 
         Ok(result)
     }

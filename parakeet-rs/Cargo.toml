@@ -1,11 +1,12 @@
 [package]
 name = "parakeet-rs"
-version.workspace = true
-edition.workspace = true
+version = "0.2.6"
+edition = "2024"
+authors = ["altunenes"]
 description = "Fast ASR & Speaker Diarization with NVIDIA Parakeet via ONNX"
-repository.workspace = true
-license.workspace = true
-keywords = ["asr", "nvidia", "onnx", "parakeet", "speech-recognition"]
+repository = "https://github.com/altunenes/parakeet-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["speech-recognition", "asr", "parakeet", "onnx", "nvidia"]
 categories = ["multimedia::audio", "science"]
 
 [dependencies]
