@@ -12,17 +12,17 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 parakeet-rs = { path = "parakeet-rs" }
-eyre = "0.6"
-hf-hub = { version = "0.4", default-features = false, features = [
+eyre = "0.6.12"
+hf-hub = { version = "0.4.3", default-features = false, features = [
   "default-tls",
   "ureq",
 ] }
-hound = "3.5"
-ndarray = "0.16"
+hound = "3.5.1"
+ndarray = "0.16.1"
 ort = { version = "2.0.0-rc.10", features = ["ndarray"] }
-rustfft = "6.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+rustfft = "6.4.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 tokenizers = { version = "0.22.2", default-features = false, features = [
   "onig",
 ] }
