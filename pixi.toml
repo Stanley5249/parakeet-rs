@@ -9,7 +9,7 @@ version = "0.1.0"
 RUST_LOG = "ort=debug"
 
 [tasks]
-parakeet = "cargo run -p parakeet-cli"
+melops = "cargo run -p melops-cli"
 
 test = "cargo test --workspace"
 test-ignored = "cargo test --workspace -- --ignored --no-capture"
@@ -29,7 +29,7 @@ PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib/site-packages/openvino/libs:$LD_LIBRARY_PATH"
 
 [feature.openvino.tasks]
-parakeet = "cargo run -p parakeet-cli -F openvino"
+melops = "cargo run -p melops-cli -F openvino"
 
 [feature.openvino.pypi-dependencies]
 onnxruntime = ">=1.22.0,<1.23"

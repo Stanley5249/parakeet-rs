@@ -9,7 +9,7 @@ This is a fork of [altunenes/parakeet-rs](https://github.com/altunenes/parakeet-
 This project is organized as a Cargo workspace:
 
 - `parakeet-rs/` - Core library crate (no execution provider features)
-- `parakeet-cli/` - CLI binary with configurable execution provider features
+- `melops-cli/` - CLI binary with configurable execution provider features
 - `melops-dl/` - Minimal yt-dlp wrapper for downloading and organizing audio by metadata
 
 ## Quick Start
@@ -18,14 +18,14 @@ Assumes you understand `cargo` and `pixi` basics.
 
 ```bash
 # Using pixi task
-pixi run parakeet audio.wav
+pixi run melops audio.wav
 # Or run cargo with selected package (-p <package>)
-pixi run cargo run -p parakeet-cli
+pixi run cargo run -p melops-cli
 
 # With GPU acceleration (-e <environment> sets feature flag)
-pixi run -e openvino parakeet audio.wav
+pixi run -e openvino melops audio.wav
 # Or run with feature flag (-F <features...>)
-pixi run -e openvino cargo run -p parakeet-cli -F openvino
+pixi run -e openvino cargo run -p melops-cli -F openvino
 ```
 
 ## License
