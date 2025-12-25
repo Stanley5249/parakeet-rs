@@ -28,16 +28,13 @@ impl OutputTemplates {
 }
 
 /// Download directories: `home`, `temp`, optional type-specific paths.
-#[derive(Clone, Debug, IntoPyObject)]
+#[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct OutputPaths(pub Option<HashMap<String, String>>);
 
 impl OutputPaths {
     /// Create with home and temp directories.
     pub fn simple(home: &Path, temp: &Path) -> Self {
-        Self(Some(HashMap::from([
-            ("home".to_string(), home.to_string_lossy().to_string()),
-            ("temp".to_string(), temp.to_string_lossy().to_string()),
-        ])))
+        Self::default().with_home(home).with_temp(temp)
     }
 
     /// System download dir for `home`, cache dir for `temp`.
@@ -45,6 +42,20 @@ impl OutputPaths {
         let home = dirs::download_dir().expect("failed to get download directory");
         let temp = std::env::temp_dir();
         Self::simple(&home, &temp)
+    }
+
+    pub fn with_home(self, home: &Path) -> Self {
+        self.with_key("home".to_string(), home)
+    }
+
+    pub fn with_temp(self, temp: &Path) -> Self {
+        self.with_key("temp".to_string(), temp)
+    }
+
+    fn with_key(self, key: String, value: &Path) -> Self {
+        let mut inner = self.0.unwrap_or_default();
+        inner.insert(key, value.to_string_lossy().to_string());
+        Self(Some(inner))
     }
 }
 

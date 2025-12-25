@@ -17,15 +17,18 @@ This project is organized as a Cargo workspace:
 Assumes you understand `cargo` and `pixi` basics.
 
 ```bash
-# Using pixi task
-pixi run melops audio.wav
+# Transcribe local audio file
+pixi run melops run audio.wav
 # Or run cargo with selected package (-p <package>)
-pixi run cargo run -p melops-cli audio.wav
+pixi run cargo run -p melops-cli run audio.wav
+
+# Download and transcribe from URL
+pixi run melops dl "https://youtu.be/jNQXAC9IVRw"
 
 # With OpenVINO (-e <environment> sets feature flag)
-pixi run -e openvino melops audio.wav
+pixi run -e openvino melops run audio.wav
 # Or run with feature flag (-F <features...>)
-pixi run -e openvino cargo run -p melops-cli -F openvino audio.wav
+pixi run -e openvino cargo run -p melops-cli -F openvino run audio.wav
 ```
 
 ## ONNX Runtime
