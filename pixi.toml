@@ -19,22 +19,26 @@ rust = ">=1.92.0,<1.93"
 rust-src = ">=1.92.0,<1.93"
 python = ">=3.13,<3.14"
 yt-dlp = ">=2025.12.8,<2026"
-ffmpeg = ">=8.0.1,<9.0"
-
-# OpenVINO Feature
-[feature.openvino.target.win-64.activation.env]
-PATH = "%CONDA_PREFIX%\\Lib\\site-packages\\openvino\\libs;%PATH%"
-
-[feature.openvino.target.linux-64.activation.env]
-LD_LIBRARY_PATH = "$CONDA_PREFIX/lib/site-packages/openvino/libs:$LD_LIBRARY_PATH"
+ffmpeg = ">=5.1.0,<9.0"
+# CPU build only on conda; other EP builds might be on PyPI
+# onnxruntime-cpp = ">=1.22.2,<2"
 
 [feature.openvino.tasks]
 melops = "cargo run -p melops-cli -F openvino"
 
+[feature.openvino.dependencies]
+libopenvino = ">=2025.4.0,<2025.5.0"
+libopenvino-onnx-frontend  = ">=2025.4.0,<2025.5.0"
+libopenvino-auto-batch-plugin = ">=2025.4.0,<2025.5.0"
+libopenvino-auto-plugin = ">=2025.4.0,<2025.5.0"
+libopenvino-hetero-plugin = ">=2025.4.0,<2025.5.0"
+libopenvino-intel-cpu-plugin = ">=2025.4.0,<2025.5.0"
+libopenvino-intel-gpu-plugin = ">=2025.4.0,<2025.5.0"
+# Windows does not support NPU plugin
+# libopenvino-intel-npu-plugin
+
 [feature.openvino.pypi-dependencies]
-onnxruntime = ">=1.22.0,<1.23"
-openvino = ">=2025.1.0,<2025.2"
-onnxruntime-openvino = ">=1.22.0,<1.23"
+onnxruntime-openvino = ">=1.22.0,<1.23.0"
 
 [environments]
 openvino = ["openvino"]

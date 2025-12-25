@@ -25,13 +25,48 @@ ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
 tracing-subscriber = { version = "0.3", features = [ "env-filter", "fmt" ] }
 
 [features]
-default = ["cpu"]
+# Execution Providers for ONNX Runtime
 
-cpu = []
+# === Shared Providers ===
+# Runtime loading libraries
+# Nvidia
 cuda = ["ort/cuda"]
 tensorrt = ["ort/tensorrt"]
-coreml = ["ort/coreml"]
-directml = ["ort/directml"]
-rocm = ["ort/rocm"]
+# TensorRT RTX
+# Might break in future, change to "nvrtx" when available
+nv  = ["ort/nv"]
+# Intel
 openvino = ["ort/openvino"]
+onednn = ["ort/onednn"]
+# AMD
+migraphx = ["ort/migraphx"]
+vitis = ["ort/vitis"]
+# Qualcomm
+qnn = ["ort/qnn"]
+# Community (Huawei)
+cann = ["ort/cann"]
+
+# === Static Providers ===
+# Compile-time linked libraries
+# Windows
+directml = ["ort/directml"]
+# AMD (Linux)
+rocm = ["ort/rocm"]
+# Apple
+coreml = ["ort/coreml"]
+# Google (Arm, x86, WebAssembly, and RISC-V)
+xnnpack = ["ort/xnnpack"]
+# Android
+nnapi = ["ort/nnapi"]
+# WebGPU
 webgpu = ["ort/webgpu"]
+# Cloud
+azure = ["ort/azure"]
+# Community (Arm)
+acl = ["ort/acl"]
+# Community (Arm)
+armnn = ["ort/armnn"]
+# Community (Apache TVM)
+tvm = ["ort/tvm"]
+# Community (Rockchip NPU)
+rknpu = ["ort/rknpu"]
