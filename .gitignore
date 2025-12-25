@@ -1,22 +1,23 @@
-/target
-DS_Store
-*.DS_Store
-.idea
-.vscode
-*.log
-*.onnx
-*.json
-*.onnx_data
-*.wav
-*.txt
-*.onnx.data
+# IDE and editor settings
+.idea/
+.vscode/
+.zed/
 
-# pixi environments
+# macOS
+.DS_Store
+
+# Pixi environments
 .pixi/*
 !.pixi/config.toml
 
+# Rust
+/target
+
+# Python
 __pycache__/
 
-# Agents
-.rules
-Agents.md
+# ONNX kernel error reports
+*.txt
+
+# Test data
+*.wav
