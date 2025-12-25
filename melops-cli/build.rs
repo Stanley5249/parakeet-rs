@@ -1,5 +1,5 @@
-// Build script for melops-cli
-// Symlinks ONNX Runtime and Executor Provider DLLs from Conda environment to target dir
+//! Build script for melops-cli
+//! Symlinks ONNX Runtime and Executor Provider DLLs from Conda environment to target dir
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -62,12 +62,13 @@ fn symlink_lib(ort_dir: &Path, target_dir: &Path, lib_name: &str) -> Result<()> 
     }
 
     if dst.exists()
-        && let Ok(()) = std::fs::remove_file(&dst) {
-            println!(
-                "cargo::warning=remove existing library symlink at {}",
-                dst.display()
-            );
-        }
+        && let Ok(()) = std::fs::remove_file(&dst)
+    {
+        println!(
+            "cargo::warning=remove existing library symlink at {}",
+            dst.display()
+        );
+    }
 
     #[cfg(target_os = "windows")]
     std::os::windows::fs::symlink_file(&src, &dst)?;
