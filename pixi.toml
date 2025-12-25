@@ -6,7 +6,7 @@ platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [activation.env]
-RUST_LOG = "ort=debug"
+RUST_LOG = "info,melops=debug,ort=warn"
 
 [tasks]
 melops = "cargo run -p melops-cli"

@@ -21,8 +21,13 @@ hound.workspace = true
 # Re-export ort for direct provider configuration
 ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
 
+# Subtitle
+srtlib = "0.2.0"
+
 # Logging
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3", features = [ "env-filter", "fmt" ] }
+tracing-appender = "0.2.4"
 
 [features]
 # Execution Providers for ONNX Runtime

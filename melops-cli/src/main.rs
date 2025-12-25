@@ -1,14 +1,18 @@
 //! Parakeet CLI - Speech-to-text transcription tool
 
+use eyre::{Context, OptionExt, Result};
 use hf_hub::api::sync::Api;
+use hound::WavReader;
+use melops_cli::srt;
 #[allow(unused_imports)]
 use ort::execution_providers::*;
 use ort::session::Session;
 use parakeet_rs::{ParakeetTDT, TimestampMode, Transcriber};
+use srtlib::Subtitles;
 use std::env;
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
+use tracing_subscriber::EnvFilter;
 
 const MODEL_ID: &str = "istupakov/parakeet-tdt-0.6b-v3-onnx";
 const MODEL_FILES: &[&str] = &[
@@ -18,80 +22,86 @@ const MODEL_FILES: &[&str] = &[
     "vocab.txt",
 ];
 
-fn main() -> ExitCode {
-    tracing_subscriber::fmt::init();
+fn main() -> Result<()> {
+    let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stderr());
 
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("Error: {e}");
-            ExitCode::FAILURE
-        }
-    }
+    tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+    let subtitles = run()?;
+    print!("{subtitles}");
+
+    Ok(())
 }
 
-fn run() -> eyre::Result<()> {
+fn run() -> Result<Subtitles> {
     let audio_path = parse_args()?;
-    print_audio_info(&audio_path)?;
+    log_wav_spec(&audio_path)?;
 
     let model_dir = fetch_model()?;
 
-    let model_load_start = Instant::now();
+    let s = Instant::now();
+
     let mut model = load_model(&model_dir)?;
-    let model_load_time = model_load_start.elapsed();
-    println!("Model loaded in {:.2} s", model_load_time.as_secs_f32());
 
-    let inference_start = Instant::now();
-    let result = transcribe(&mut model, &audio_path)?;
-    let inference_time = inference_start.elapsed();
-    println!(
-        "Inference completed in {:.2} s",
-        inference_time.as_secs_f32()
-    );
+    let d = s.elapsed();
+    tracing::info!(duration = %format_secs(d.as_secs_f32()), "model loaded");
 
-    print_result(&result.text, &result.tokens);
-    Ok(())
+    let s = Instant::now();
+
+    let result = model.transcribe_file(audio_path, Some(TimestampMode::Sentences))?;
+
+    let d = s.elapsed();
+    tracing::info!(duration = %format_secs(d.as_secs_f32()), "inference completed");
+
+    let subtitles = srt::to_subtitles(&result.tokens);
+
+    Ok(subtitles)
 }
 
-fn parse_args() -> eyre::Result<PathBuf> {
+fn parse_args() -> Result<PathBuf> {
     env::args()
         .nth(1)
         .map(PathBuf::from)
-        .ok_or_else(|| eyre::eyre!("Usage: parakeet <audio.wav>"))
+        .ok_or_else(|| eyre::eyre!("usage: melops <audio.wav>"))
 }
 
-fn print_audio_info(audio_path: &PathBuf) -> eyre::Result<()> {
-    let reader = hound::WavReader::open(audio_path)?;
+fn log_wav_spec(path: &Path) -> Result<()> {
+    let reader = WavReader::open(path)
+        .wrap_err_with(|| format!("failed to open audio: {}", path.display()))?;
+
     let spec = reader.spec();
     let duration = reader.duration() as f32 / spec.sample_rate as f32;
-    println!("Audio metadata:");
-    println!("  Sample rate: {} Hz", spec.sample_rate);
-    println!("  Channels: {}", spec.channels);
-    println!("  Bits per sample: {}", spec.bits_per_sample);
-    println!("  Duration: {:.2} s", duration);
+
+    tracing::debug!(
+        path = %path.display(),
+        duration = format_secs(duration),
+        channels = spec.channels,
+        sample_rate = spec.sample_rate,
+        bits_per_sample = spec.bits_per_sample,
+        fromat = ?spec.sample_format,
+        "wav spec"
+    );
     Ok(())
 }
 
-fn fetch_model() -> eyre::Result<PathBuf> {
-    println!("Locating model...");
+/// Fetch model files from Hugging Face Hub.
+fn fetch_model() -> Result<PathBuf> {
+    tracing::info!("locating model...");
+
     let api = Api::new()?;
     let repo = api.model(MODEL_ID.to_string());
 
-    let (first, files) = MODEL_FILES
-        .split_first()
-        .ok_or_else(|| eyre::eyre!("No model files specified"))?;
-
-    let path = repo
-        .get(first)?
+    MODEL_FILES
+        .iter()
+        .map(|file| repo.get(file))
+        .try_fold(None, |_, res| res.map(Some))?
+        .ok_or_eyre("no model files specified")?
         .parent()
-        .map(|p| p.to_path_buf())
-        .ok_or_else(|| eyre::eyre!("Failed to get model directory"))?;
-
-    for file in files {
-        repo.get(file)?;
-    }
-
-    Ok(path)
+        .ok_or_eyre("failed to get model directory")
+        .map(|path| path.to_path_buf())
 }
 
 /// Load Parakeet model with execution providers configured by Cargo features.
@@ -110,8 +120,8 @@ fn fetch_model() -> eyre::Result<PathBuf> {
 ///
 /// Ensure required hardware, drivers, and runtime dependencies are installed for the
 /// desired provider.
-fn load_model(model_dir: &PathBuf) -> eyre::Result<ParakeetTDT> {
-    println!("Loading model from: {}", model_dir.display());
+fn load_model(model_dir: &PathBuf) -> Result<ParakeetTDT> {
+    tracing::info!(dir = %model_dir.display(), "loading model");
 
     let builder = Session::builder()?.with_execution_providers([
         #[cfg(feature = "cuda")]
@@ -131,18 +141,7 @@ fn load_model(model_dir: &PathBuf) -> eyre::Result<ParakeetTDT> {
     Ok(ParakeetTDT::from_pretrained(model_dir, Some(builder))?)
 }
 
-fn transcribe(
-    model: &mut ParakeetTDT,
-    audio_path: &PathBuf,
-) -> eyre::Result<parakeet_rs::TranscriptionResult> {
-    println!("Transcribing: {}", audio_path.display());
-    Ok(model.transcribe_file(audio_path, Some(TimestampMode::Sentences))?)
-}
-
-fn print_result(text: &str, tokens: &[parakeet_rs::TimedToken]) {
-    println!("\n{text}");
-    println!("\nSentences:");
-    for t in tokens {
-        println!("[{:.2}s - {:.2}s]: {}", t.start, t.end, t.text);
-    }
+/// Format seconds as a string with two decimal places.
+fn format_secs(secs: f32) -> String {
+    format!("{:.2}s", secs)
 }
