@@ -29,7 +29,7 @@ fn get_target_dir() -> Result<PathBuf> {
         Some(dir) => Ok(dir.to_path_buf()),
         None => {
             let msg = format!(
-                "could not determine target directory from OUT_DIR={}",
+                "could not determine target directory from OUT_DIR={:?}",
                 out_dir.display()
             );
             println!("cargo::error={}", msg);
@@ -56,7 +56,7 @@ fn symlink_lib(ort_dir: &Path, target_dir: &Path, lib_name: &str) -> Result<()> 
     let dst = target_dir.join(lib_name);
 
     if !src.exists() {
-        let msg = format!("could not find library at {}", src.display());
+        let msg = format!("could not find library at {:?}", src.display());
         println!("cargo::error={}", msg);
         return Err(BuildErr(msg).into());
     }
@@ -65,7 +65,7 @@ fn symlink_lib(ort_dir: &Path, target_dir: &Path, lib_name: &str) -> Result<()> 
         && let Ok(()) = std::fs::remove_file(&dst)
     {
         println!(
-            "cargo::warning=remove existing library symlink at {}",
+            "cargo::warning=remove existing library symlink at {:?}",
             dst.display()
         );
     }

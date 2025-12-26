@@ -25,27 +25,27 @@ pub fn execute(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     let output = output.unwrap_or_else(|| input.with_extension("srt"));
 
     tracing::info!(
-        input = %input.display(),
-        output = %output.display(),
+        input = ?input.display(),
+        output = ?output.display(),
         "transcribing audio"
     );
 
     let subtitles = asr_from_wav_file(&input)?;
 
-    tracing::info!(path = %output.display(), "write srt file");
+    tracing::info!(path = ?output.display(), "write srt file");
 
     // Write to stdout
     print!("{subtitles}");
 
     std::fs::write(&output, subtitles.to_string())
-        .wrap_err_with(|| format!("failed to write srt: {}", output.display()))?;
+        .wrap_err_with(|| format!("failed to write srt: {:?}", output.display()))?;
 
     Ok(())
 }
 
 /// Perform ASR on WAV file and return subtitles.
 fn asr_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
-    log_wav_spec(&wav_path)?;
+    log_wav_spec(wav_path)?;
 
     let model_dir = fetch_model()?;
 
@@ -71,13 +71,13 @@ fn asr_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
 /// Log WAV file specification for debugging.
 fn log_wav_spec(path: &Path) -> Result<()> {
     let reader = WavReader::open(path)
-        .wrap_err_with(|| format!("failed to open audio: {}", path.display()))?;
+        .wrap_err_with(|| format!("failed to open audio: {:?}", path.display()))?;
 
     let spec = reader.spec();
     let duration = reader.duration() as f32 / spec.sample_rate as f32;
 
     tracing::debug!(
-        path = %path.display(),
+        path = ?path.display(),
         duration_secs = %duration,
         channels = spec.channels,
         sample_rate = spec.sample_rate,
@@ -122,7 +122,7 @@ fn fetch_model() -> Result<PathBuf> {
 /// Ensure required hardware, drivers, and runtime dependencies are installed for the
 /// desired provider.
 fn load_model(model_dir: &PathBuf) -> Result<ParakeetTDT> {
-    tracing::info!(dir = %model_dir.display(), "loading model");
+    tracing::info!(dir = ?model_dir.display(), "loading model");
 
     let builder = Session::builder()?.with_execution_providers([
         #[cfg(feature = "cuda")]

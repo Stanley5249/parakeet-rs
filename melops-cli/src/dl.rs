@@ -26,7 +26,7 @@ pub fn execute(url: String, output_dir: Option<PathBuf>) -> Result<()> {
     let audio_path = resolve_audio_path(&info, output_dir)?;
 
     tracing::info!(
-        downloaded = %audio_path.display(),
+        downloaded = ?audio_path.display(),
         "audio downloaded, starting transcription"
     );
 
@@ -65,11 +65,11 @@ fn resolve_audio_path(info: &DownloadInfo, output_dir: Option<PathBuf>) -> Resul
     path.push(&info.title);
     path.set_extension("wav");
 
-    tracing::debug!(resolved_path = %path.display(), "resolved audio path");
+    tracing::debug!(resolved_path = ?path.display(), "resolved audio path");
 
     if !path.exists() {
         tracing::error!(
-            path = %path.display(),
+            path = ?path.display(),
             "audio file not found at expected location"
         );
     }
