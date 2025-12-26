@@ -1,8 +1,8 @@
-//! Parakeet CLI - Speech-to-text transcription tool
+//! Mel CLI - Audio captioning tool
 
 use clap::Parser;
 use eyre::Result;
-use melops_cli::cli::{Cli, run_cli};
+use melops::cli::{Cli, run_cli};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<()> {

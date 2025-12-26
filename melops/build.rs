@@ -1,4 +1,4 @@
-//! Build script for melops-cli
+//! Build script for melops
 //! Symlinks ONNX Runtime and Executor Provider DLLs from Conda environment to target dir
 use std::path::{Path, PathBuf};
 

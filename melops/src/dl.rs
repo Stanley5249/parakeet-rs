@@ -1,4 +1,4 @@
-//! Dl subcommand - download and transcribe audio from URL.
+//! Dl subcommand - download and generate captions from audio URL.
 
 use eyre::{Context, Result};
 use melops_dl::asr::AudioFormat;
@@ -27,15 +27,15 @@ pub fn execute(url: String, output_dir: Option<PathBuf>) -> Result<()> {
 
     tracing::info!(
         downloaded = ?audio_path.display(),
-        "audio downloaded, starting transcription"
+        "audio downloaded, starting captioning"
     );
 
     // Generate SRT path (same directory and name as audio, but .srt extension)
     let mut srt_path = audio_path.clone();
     srt_path.set_extension("srt");
 
-    // Transcribe using run module's logic
-    crate::run::execute(audio_path, Some(srt_path))
+    // Generate captions using run module's logic
+    crate::cap::execute(audio_path, Some(srt_path))
 }
 
 /// Resolve the downloaded audio file path from info dict and output directory.

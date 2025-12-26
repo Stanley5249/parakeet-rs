@@ -1,5 +1,5 @@
 [package]
-name = "melops-cli"
+name = "melops"
 version.workspace = true
 edition.workspace = true
 description = "CLI tool for speech-to-text transcription using NVIDIA Parakeet"
@@ -9,7 +9,7 @@ keywords = ["asr", "nvidia", "onnx", "parakeet", "speech-recognition"]
 categories = ["command-line-utilities", "multimedia::audio"]
 
 [[bin]]
-name = "melops"
+name = "mel"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,4 +1,4 @@
-//! Run subcommand - transcribe audio file to SRT.
+//! Cap subcommand - generate captions from audio file to SRT.
 
 use crate::srt;
 use eyre::{Context, OptionExt, Result};
@@ -27,10 +27,10 @@ pub fn execute(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     tracing::info!(
         input = ?input.display(),
         output = ?output.display(),
-        "transcribing audio"
+        "generating captions"
     );
 
-    let subtitles = asr_from_wav_file(&input)?;
+    let subtitles = caption_from_wav_file(&input)?;
 
     tracing::info!(path = ?output.display(), "write srt file");
 
@@ -43,8 +43,8 @@ pub fn execute(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-/// Perform ASR on WAV file and return subtitles.
-fn asr_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
+/// Perform ASR on WAV file and return captions as subtitles.
+fn caption_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
     log_wav_spec(wav_path)?;
 
     let model_dir = fetch_model()?;

@@ -9,7 +9,7 @@ version = "0.1.0"
 RUST_LOG = "info,melops=debug,ort=warn"
 
 [tasks]
-melops = "cargo run -p melops-cli"
+mel = "cargo run -p melops"
 
 test = "cargo test --workspace"
 test-ignored = "cargo test --workspace -- --ignored --no-capture"
@@ -24,7 +24,7 @@ ffmpeg = ">=5.1.0,<9.0"
 # onnxruntime-cpp = ">=1.22.2,<2"
 
 [feature.openvino.tasks]
-melops = "cargo run -p melops-cli -F openvino"
+mel = "cargo run -p melops -F openvino"
 
 [feature.openvino.dependencies]
 libopenvino = ">=2025.4.0,<2025.5.0"

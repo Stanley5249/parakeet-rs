@@ -5,8 +5,8 @@ use eyre::Result;
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
-#[command(name = "melops")]
-#[command(about = "Speech recognition and audio download tools")]
+#[command(name = "mel")]
+#[command(about = "Audio captioning and download tools")]
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]
@@ -15,8 +15,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Transcribe audio file to SRT subtitles
-    Run {
+    /// Generate captions from audio file to SRT subtitles
+    Cap {
         /// Path to input WAV file
         path: PathBuf,
 
@@ -25,7 +25,7 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// Download and transcribe audio from URL
+    /// Download and generate captions from audio URL
     Dl {
         /// URL to download
         url: String,
@@ -41,7 +41,7 @@ pub fn run_cli(cli: Cli) -> Result<()> {
     tracing::debug!(?cli, "parsed arguments");
 
     match cli.command {
-        Commands::Run { path, output } => crate::run::execute(path, output),
+        Commands::Cap { path, output } => crate::cap::execute(path, output),
         Commands::Dl { url, output } => crate::dl::execute(url, output),
     }
 }
@@ -52,22 +52,22 @@ mod tests {
 
     #[test]
     fn parses_run_command() {
-        let cli = Cli::parse_from(["melops", "run", "audio.wav"]);
+        let cli = Cli::parse_from(["mel", "cap", "audio.wav"]);
 
         assert!(matches!(
             &cli.command,
-            Commands::Run { path, output: None }
+            Commands::Cap { path, output: None }
             if path == "audio.wav"
         ));
     }
 
     #[test]
     fn parses_run_with_output() {
-        let cli = Cli::parse_from(["melops", "run", "audio.wav", "-o", "output.srt"]);
+        let cli = Cli::parse_from(["mel", "cap", "audio.wav", "-o", "output.srt"]);
 
         assert!(matches!(
             &cli.command,
-            Commands::Run { path, output }
+            Commands::Cap { path, output }
             if path.to_str() == Some("audio.wav")
             && output.as_deref().is_some_and(|p| p == "output.srt")
         ));
@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn parses_dl_command() {
-        let cli = Cli::parse_from(["melops", "dl", "https://example.com/video"]);
+        let cli = Cli::parse_from(["mel", "dl", "https://example.com/video"]);
 
         assert!(matches!(
             &cli.command,
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn parses_dl_with_output() {
         let cli = Cli::parse_from([
-            "melops",
+            "mel",
             "dl",
             "https://example.com/video",
             "-o",

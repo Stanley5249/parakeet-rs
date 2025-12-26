@@ -1,14 +1,14 @@
 //! Integration tests for melops CLI.
 
 use clap::Parser;
-use melops_cli::cli::{Cli, run_cli};
+use melops::cli::{Cli, run_cli};
 
 const URL: &str = "https://youtu.be/jNQXAC9IVRw";
 
 #[test]
 #[ignore = "network I/O and model download required"]
 fn dl_downloads_and_transcribes() {
-    let temp_dir = std::env::temp_dir().join("melops-cli-test");
+    let temp_dir = std::env::temp_dir().join("melops-test");
 
     // Clean up previous test run
     if temp_dir.exists() {
@@ -16,7 +16,7 @@ fn dl_downloads_and_transcribes() {
     }
     std::fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
 
-    let cli = Cli::parse_from(["melops", "dl", URL, "-o", temp_dir.to_str().unwrap()]);
+    let cli = Cli::parse_from(["mel", "dl", URL, "-o", temp_dir.to_str().unwrap()]);
 
     run_cli(cli).expect("failed to download and transcribe");
 

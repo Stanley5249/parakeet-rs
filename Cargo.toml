@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["parakeet-rs", "melops-cli", "melops-dl"]
+members = ["parakeet-rs", "melops", "melops-dl"]
 
 [workspace.package]
 version = "0.2.6"
@@ -11,7 +11,7 @@ repository = "https://github.com/Stanley5249/parakeet-rs"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-melops-cli = { path = "melops-cli" }
+melops = { path = "melops" }
 melops-dl = { path = "melops-dl" }
 parakeet-rs = { path = "parakeet-rs" }
 
