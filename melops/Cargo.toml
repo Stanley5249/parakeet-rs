@@ -21,7 +21,7 @@ melops-asr.workspace = true
 melops-dl.workspace = true
 
 # Re-export ort for direct provider configuration
-ort = { workspace = true, features = ["download-binaries"] }
+ort = { workspace = true, features = ["download-binaries", "copy-dylibs"] }
 
 # Subtitle
 srtlib = "0.2.0"

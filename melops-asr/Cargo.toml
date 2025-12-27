@@ -13,10 +13,10 @@ parakeet-rs.workspace = true
 clap.workspace = true
 hound.workspace = true
 ndarray.workspace = true
-ort = { workspace = true, features = ["std", "ndarray"] }
+ort = { workspace = true, features = ["std", "ndarray", "tracing"] }
 thiserror.workspace = true
 
 tracing = "0.1.44"
 
 [dev-dependencies]
-ort = { workspace = true, features = ["download-binaries"] }
+ort = { workspace = true, features = ["download-binaries", "copy-dylibs"] }
