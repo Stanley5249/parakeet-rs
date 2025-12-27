@@ -12,7 +12,7 @@
 //! use melops_dl::{dl::download, asr::AudioFormat};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let info = download("https://youtube.com/watch?v=example", AudioFormat::Pcm16.into())?;
+//! let (_file_path, info) = download("https://youtube.com/watch?v=example", AudioFormat::Pcm16.into())?;
 //! println!("Downloaded: {}", info.title);
 //! # Ok(())
 //! # }
@@ -40,8 +40,8 @@
 //!     ..Default::default()
 //! };
 //!
-//! let info = download("https://youtube.com/watch?v=example", opts)?;
-//! println!("Downloaded: {} by {:?}", info.title, info.uploader);
+//! let (file_path, info) = download("https://youtube.com/watch?v=example", opts)?;
+//! println!("Downloaded '{}' to {:?}", info.title, file_path);
 //! # Ok(())
 //! # }
 //! ```

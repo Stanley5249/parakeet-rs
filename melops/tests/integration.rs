@@ -21,16 +21,13 @@ fn dl_downloads_and_transcribes() {
     run_cli(cli).expect("failed to download and transcribe");
 
     // Verify SRT file was created
-    // Expected path: temp_dir/Youtube/jawed/Me at the zoo/Me at the zoo.srt
-    let mut srt_path = temp_dir.clone();
-    srt_path.push("Youtube");
-    srt_path.push("jawed");
-    srt_path.push("Me at the zoo");
-    srt_path.push("Me at the zoo.srt");
+    // Expected path: temp_dir/Youtube/jawed/jNQXAC9IVRw/Me_at_the_zoo.srt
+    // Note: restrictfilenames=true sanitizes title (spaces -> underscores)
+    let srt_path = temp_dir.join("Youtube/jawed/jNQXAC9IVRw/Me_at_the_zoo.srt");
 
     assert!(
         srt_path.exists(),
-        "SRT file not found: {}",
+        "SRT file not found: {:?}",
         srt_path.display()
     );
 }

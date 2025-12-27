@@ -1,100 +1,113 @@
 //! ASR preset download integration tests.
 //!
 //! Tests: YouTube download, WAV format (16kHz mono 16-bit PCM via hound),
-//! path grouping (Extractor/uploader/title).
+//! path grouping (Extractor/uploader/id).
 //!
 //! Uses "Me at the zoo" (jNQXAC9IVRw) - predictable metadata.
 
-use eyre::{Context, Result};
+use eyre::{Context, OptionExt, Result, ensure};
 use melops_dl::asr::{ASR_OUTPUT_TEMPLATE, AudioFormat};
 use melops_dl::dl::{DownloadInfo, DownloadOptions, OutputPaths, OutputTemplates, download};
-use std::path::{Path, PathBuf};
+use std::fs::{create_dir_all, remove_dir_all};
+use std::path::PathBuf;
 use std::sync::LazyLock;
 
-const URL: &str = "https://youtu.be/jNQXAC9IVRw";
-const EXPECTED_TITLE: &str = "Me at the zoo";
-const EXPECTED_UPLOADER: &str = "jawed";
-const EXPECTED_EXTRACTOR: &str = "Youtube";
+const TEST_URL: &str = "https://youtu.be/jNQXAC9IVRw";
+const TEST_EXTRACTOR: &str = "Youtube";
+const TEST_UPLOADER: &str = "jawed";
+const TEST_ID: &str = "jNQXAC9IVRw";
+const TEST_TITLE: &str = "Me at the zoo";
+const TEST_REL_PATH: &str = "Youtube/jawed/jNQXAC9IVRw/Me_at_the_zoo.wav";
 
 struct TestContext {
-    temp_dir: PathBuf,
+    file_path: PathBuf,
     info: DownloadInfo,
 }
 
 static TEST_CONTEXT: LazyLock<Result<TestContext>> = LazyLock::new(|| {
+    let temp_dir = create_temp_dir();
+
+    let mut preset: DownloadOptions = AudioFormat::Pcm16.into();
+    preset.paths = Some(OutputPaths::simple(&temp_dir, &temp_dir));
+    preset.outtmpl = Some(OutputTemplates::simple(ASR_OUTPUT_TEMPLATE.to_string()));
+
+    let (audio_path, info) =
+        download(TEST_URL, preset).context("yt-dlp download failed for ASR Pcm16 preset")?;
+
+    // Validate file_path was returned and exists
+    let file_path = audio_path.ok_or_eyre("download did not return file_path")?;
+
+    ensure!(
+        file_path.exists(),
+        "downloaded file not found at: {:?}",
+        file_path.display()
+    );
+
+    Ok(TestContext { file_path, info })
+});
+
+fn create_temp_dir() -> PathBuf {
     let mut temp_dir = std::env::temp_dir();
     temp_dir.push("melops-dl-test");
 
     // Clean up previous test run
     if temp_dir.exists() {
-        std::fs::remove_dir_all(&temp_dir).ok();
+        remove_dir_all(&temp_dir).ok();
     }
-    std::fs::create_dir_all(&temp_dir).context("failed to create temp dir")?;
 
-    let paths = OutputPaths::simple(&temp_dir, &temp_dir);
-    let mut preset: DownloadOptions = AudioFormat::Pcm16.into();
-    preset.paths = Some(paths);
-    preset.outtmpl = Some(OutputTemplates::simple(ASR_OUTPUT_TEMPLATE.to_string()));
+    create_dir_all(&temp_dir).expect("failed to create temp dir");
 
-    let info = download(URL, preset).context("yt-dlp download failed for ASR Pcm16 preset")?;
-
-    Ok(TestContext { temp_dir, info })
-});
+    temp_dir
+}
 
 #[track_caller]
 fn get_test_context() -> &'static TestContext {
     TEST_CONTEXT.as_ref().expect("download failed")
 }
 
-fn expected_dir(temp_dir: &Path) -> PathBuf {
-    let mut path = temp_dir.to_path_buf();
-    path.push(EXPECTED_EXTRACTOR);
-    path.push(EXPECTED_UPLOADER);
-    path.push(EXPECTED_TITLE);
-    path
-}
+#[test]
+#[ignore = "network I/O"]
+fn wav_file_exist() {
+    let ctx = get_test_context();
 
-fn wav_path(temp_dir: &Path) -> PathBuf {
-    let mut path = expected_dir(temp_dir);
-    path.push(format!("{EXPECTED_TITLE}.wav"));
-    path
+    assert!(
+        ctx.file_path.exists(),
+        "WAV file not found: {:?}",
+        ctx.file_path.display()
+    );
 }
 
 #[test]
 #[ignore = "network I/O"]
-fn files_exist() {
+fn info_file_exist() {
     let ctx = get_test_context();
+    let info_file = ctx.file_path.with_extension("info.json");
 
-    let wav = wav_path(&ctx.temp_dir);
-    assert!(wav.exists(), "WAV file not found: {wav:?}");
-
-    let mut info_json = expected_dir(&ctx.temp_dir);
-    info_json.push(format!("{EXPECTED_TITLE}.info.json"));
-    assert!(info_json.exists(), "info.json not found: {info_json:?}");
+    assert!(
+        info_file.exists(),
+        "info.json not found: {:?}",
+        info_file.display()
+    );
 }
 
 #[test]
 #[ignore = "network I/O"]
 fn path_structure() {
     let ctx = get_test_context();
-    let wav = wav_path(&ctx.temp_dir);
 
-    let mut expected = ctx.temp_dir.clone();
-    expected.push(EXPECTED_EXTRACTOR);
-    expected.push(EXPECTED_UPLOADER);
-    expected.push(EXPECTED_TITLE);
-    expected.push(format!("{EXPECTED_TITLE}.wav"));
-
-    assert_eq!(wav, expected, "path structure mismatch");
+    assert!(
+        ctx.file_path.ends_with(TEST_REL_PATH),
+        "expected path to end with {TEST_REL_PATH}, got {:?}",
+        ctx.file_path.display()
+    );
 }
 
 #[test]
 #[ignore = "network I/O"]
 fn wav_format() {
     let ctx = get_test_context();
-    let wav = wav_path(&ctx.temp_dir);
 
-    let reader = hound::WavReader::open(&wav).expect("failed to open WAV file");
+    let reader = hound::WavReader::open(&ctx.file_path).expect("failed to open WAV file");
     let spec = reader.spec();
 
     assert!(
@@ -115,23 +128,18 @@ fn wav_format() {
 #[ignore = "network I/O"]
 fn info_dict_fields() {
     let ctx = get_test_context();
-    let info = &ctx.info;
 
-    assert_eq!(info.id, "jNQXAC9IVRw", "video ID mismatch");
-    assert_eq!(info.title, EXPECTED_TITLE, "title mismatch");
-    assert_eq!(
-        info.extractor_key.as_deref(),
-        Some(EXPECTED_EXTRACTOR),
-        "extractor mismatch"
-    );
-    assert!(
-        info.uploader.as_deref() == Some(EXPECTED_UPLOADER)
-            || info.uploader_id.as_deref() == Some(EXPECTED_UPLOADER),
-        "uploader mismatch: {:?} / {:?}",
-        info.uploader,
-        info.uploader_id
-    );
-    assert!(info.duration.is_some(), "missing duration");
-
-    println!("{info:?}");
+    match &ctx.info {
+        DownloadInfo {
+            id,
+            title,
+            extractor_key: Some(extractor_key),
+            uploader: Some(uploader),
+            ..
+        } if id == TEST_ID
+            && title == TEST_TITLE
+            && extractor_key == TEST_EXTRACTOR
+            && uploader == TEST_UPLOADER => {}
+        _ => panic!(),
+    }
 }

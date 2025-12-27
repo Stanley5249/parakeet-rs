@@ -1,12 +1,12 @@
-//! yt-dlp Python API wrappers.
+//! Type-safe yt-dlp Python API wrappers.
 //!
-//! Type-safe bindings to [yt-dlp](https://github.com/yt-dlp/yt-dlp) `YoutubeDL` parameters.
+//! Bindings to [yt-dlp](https://github.com/yt-dlp/yt-dlp) `YoutubeDL` parameters.
 //!
 //! ```no_run
 //! use melops_dl::{dl::download, asr::AudioFormat};
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let info = download("https://youtube.com/watch?v=example", AudioFormat::Pcm16.into())?;
-//! println!("Downloaded: {}", info.title);
+//! let (file_path, info) = download("https://youtube.com/watch?v=example", AudioFormat::Pcm16.into())?;
+//! println!("Downloaded '{}' to {:?}", info.title, file_path);
 //! # Ok(())
 //! # }
 //! ```
@@ -14,30 +14,42 @@
 use pyo3::ffi::c_str;
 use pyo3::prelude::*;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// Filename templates using `%(field)s` syntax. Key `default` required.
+/// Filename templates using `%(field)s` syntax.
+///
+/// Maps output types to template strings. Key `default` is required.
+///
+/// See: <https://github.com/yt-dlp/yt-dlp#output-template>
 #[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct OutputTemplates(pub Option<HashMap<String, String>>);
 
 impl OutputTemplates {
-    /// Create with a single default template.
+    /// Creates template with single default pattern.
+    ///
+    /// ```
+    /// # use melops_dl::dl::OutputTemplates;
+    /// let templates = OutputTemplates::simple("%(title)s.%(ext)s".to_string());
+    /// println!("{:?}", templates);
+    /// ```
     pub fn simple(default: String) -> Self {
         Self(Some(HashMap::from([("default".to_string(), default)])))
     }
 }
 
 /// Download directories: `home`, `temp`, optional type-specific paths.
+///
+/// See: <https://github.com/yt-dlp/yt-dlp#filesystem-options>
 #[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct OutputPaths(pub Option<HashMap<String, String>>);
 
 impl OutputPaths {
-    /// Create with home and temp directories.
+    /// Creates paths with home and temp directories.
     pub fn simple(home: &Path, temp: &Path) -> Self {
         Self::default().with_home(home).with_temp(temp)
     }
 
-    /// System download dir for `home`, cache dir for `temp`.
+    /// Uses system download dir for `home`, cache dir for `temp`.
     pub fn system_default() -> Self {
         let home = dirs::download_dir().expect("failed to get download directory");
         let temp = std::env::temp_dir();
@@ -59,84 +71,133 @@ impl OutputPaths {
     }
 }
 
-/// Post-download operation: `key` (e.g., `"FFmpegExtractAudio"`), optional `preferredcodec`.
+/// Post-processor specification: `key` (e.g., `FFmpegExtractAudio`), optional `preferredcodec`.
+///
+/// See: <https://github.com/yt-dlp/yt-dlp#post-processing-options>
 #[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct PostProcessor {
+    /// Post-processor name (e.g., `FFmpegExtractAudio`, `FFmpegVideoConvertor`)
     pub key: String,
+    /// Preferred output codec (e.g., `wav`, `mp3`, `mp4`)
     pub preferredcodec: Option<String>,
 }
 
 /// CLI arguments passed to yt-dlp post-processors.
-///
-/// The `ffmpeg` field contains arguments passed to FFmpeg during post-processing.
-/// Example: `["-ar", "16000", "-ac", "1"]` for 16kHz mono conversion.
 #[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct PostProcessorArgs {
+    /// FFmpeg arguments (e.g., `["-ar", "16000", "-ac", "1"]` for 16kHz mono)
+    ///
+    /// ```
+    /// # use melops_dl::dl::PostProcessorArgs;
+    /// let args = PostProcessorArgs {
+    ///     ffmpeg: vec!["-ar".to_string(), "16000".to_string()],
+    /// };
+    /// println!("Sample rate: 16kHz via {:?}", args.ffmpeg);
+    /// ```
     pub ffmpeg: Vec<String>,
 }
 
 /// yt-dlp download configuration passed to `YoutubeDL(params)`.
 ///
-/// # Warning
-/// Setting `getcomments` to true can take a very long time!
+/// Maps to Python dict for `YoutubeDL` constructor. Use `cli_to_api.py` to convert CLI flags.
+///
+/// See: <https://github.com/yt-dlp/yt-dlp#embedding-yt-dlp>
 #[derive(Clone, Debug, Default, IntoPyObject)]
 pub struct DownloadOptions {
+    /// Format selection (e.g., `bestaudio`, `bestvideo+bestaudio`)
     pub format: Option<String>,
+    /// Download directories (`home`, `temp`, type-specific)
     pub paths: Option<OutputPaths>,
+    /// Filename templates for different output types
     pub outtmpl: Option<OutputTemplates>,
+    /// Post-processing steps (extraction, conversion)
     pub postprocessors: Option<Vec<PostProcessor>>,
+    /// CLI arguments for post-processors
     pub postprocessor_args: Option<PostProcessorArgs>,
+    /// Write metadata JSON to disk
     pub writeinfojson: Option<bool>,
+    /// Restrict filenames to ASCII characters
+    pub restrictfilenames: Option<bool>,
+    /// Fetch comments (warning: slow)
     pub getcomments: Option<bool>,
+    /// Suppress console output
     pub quiet: Option<bool>,
+    /// Suppress warnings
     pub no_warnings: Option<bool>,
 }
 
 /// Essential metadata from yt-dlp info dict.
 ///
-/// Extracted via `FromPyObject` from the sanitized info dict returned by `extract_info`.
-/// Only includes fields commonly needed for ASR pipelines.
+/// Subset of fields from `YoutubeDL.sanitize_info()`. Full dict available via JSON.
+///
+/// See: <https://github.com/yt-dlp/yt-dlp#output-template>
 #[derive(Clone, Debug, FromPyObject)]
 #[pyo3(from_item_all)]
 pub struct DownloadInfo {
-    /// Video identifier (required by yt-dlp)
+    /// Video ID (platform-specific, required)
     pub id: String,
-    /// Video title (required by yt-dlp)
+    /// Video title (required)
     pub title: String,
-    /// Extractor name (e.g., "Youtube")
+    /// Extractor name (e.g., `Youtube`, `Vimeo`)
     pub extractor_key: Option<String>,
-    /// Full name of the video uploader
+    /// Uploader full name
     pub uploader: Option<String>,
-    /// Nickname or ID of the video uploader
+    /// Uploader username or channel ID
     pub uploader_id: Option<String>,
-    /// Length of the video in seconds
+    /// Duration in seconds
     pub duration: Option<f64>,
-    /// URL to the video webpage
+    /// Video webpage URL
     pub webpage_url: Option<String>,
-    /// Full video description
+    /// Video description text
     pub description: Option<String>,
-    /// Video upload date in UTC (YYYYMMDD)
+    /// Upload date in UTC (`YYYYMMDD`)
     pub upload_date: Option<String>,
-    /// How many users have watched the video
+    /// View count
     pub view_count: Option<i64>,
-    /// Number of positive ratings
+    /// Number of likes
     pub like_count: Option<i64>,
-    /// Age restriction for the video (0 = no restriction)
+    /// Age restriction (`0` = none)
     pub age_limit: Option<i64>,
 }
 
-/// Download a single URL and return the info dict.
+/// Downloads media from URL using yt-dlp.
 ///
-/// Uses `extract_info(url, download=True)` to download and get metadata in one request.
-pub fn download(url: &str, opts: DownloadOptions) -> Result<DownloadInfo, PyErr> {
+/// Returns `(file_path, info)` where `file_path` is the final processed file location.
+/// `file_path` is `None` if download failed or no file was saved.
+///
+/// # Errors
+///
+/// Returns `PyErr` if yt-dlp download fails or Python API call errors.
+///
+/// # Example
+///
+/// ```no_run
+/// use melops_dl::{dl::download, asr::AudioFormat};
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let (file_path, info) = download(
+///     "https://youtube.com/watch?v=BaW_jenozKc",
+///     AudioFormat::Pcm16.into()
+/// )?;
+///
+/// if let Some(path) = file_path {
+///     println!("Downloaded '{}' to: {}", info.title, path.display());
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub fn download(
+    url: &str,
+    opts: DownloadOptions,
+) -> Result<(Option<PathBuf>, DownloadInfo), PyErr> {
     Python::attach(|py| {
         let module = PyModule::from_code(py, c_str!(include_str!("./dl.py")), c"dl.py", c"dl")?;
 
         let py_params = opts.into_pyobject(py)?;
 
-        let info = module.getattr("download")?.call1((url, py_params))?;
-
-        info.extract()
+        module
+            .getattr("download")?
+            .call1((url, py_params))?
+            .extract()
     })
 }
 
@@ -273,7 +334,7 @@ mod tests {
             assert_py_eq(
                 py,
                 py_obj.as_any(),
-                c"{'format': 'bestvideo+bestaudio', 'paths': None, 'outtmpl': None, 'postprocessors': None, 'postprocessor_args': None, 'writeinfojson': False, 'getcomments': None, 'quiet': False, 'no_warnings': None}"
+                c"{'format': 'bestvideo+bestaudio', 'paths': None, 'outtmpl': None, 'postprocessors': None, 'postprocessor_args': None, 'writeinfojson': False, 'restrictfilenames': None, 'getcomments': None, 'quiet': False, 'no_warnings': None}"
             );
         });
     }

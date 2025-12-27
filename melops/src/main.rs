@@ -6,6 +6,8 @@ use melops::cli::{Cli, run_cli};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<()> {
+    color_eyre::install()?;
+
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stderr());
 
     tracing_subscriber::fmt()

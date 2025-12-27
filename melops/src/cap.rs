@@ -20,7 +20,7 @@ const MODEL_FILES: &[&str] = &[
     "vocab.txt",
 ];
 
-pub fn execute(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
+pub fn execute(input: &Path, output: Option<PathBuf>) -> Result<()> {
     // Resolve output path
     let output = output.unwrap_or_else(|| input.with_extension("srt"));
 
@@ -30,7 +30,7 @@ pub fn execute(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
         "generating captions"
     );
 
-    let subtitles = caption_from_wav_file(&input)?;
+    let subtitles = caption_from_wav_file(input)?;
 
     tracing::info!(path = ?output.display(), "write srt file");
 

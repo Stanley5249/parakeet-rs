@@ -41,7 +41,7 @@ pub fn run_cli(cli: Cli) -> Result<()> {
     tracing::debug!(?cli, "parsed arguments");
 
     match cli.command {
-        Commands::Cap { path, output } => crate::cap::execute(path, output),
+        Commands::Cap { path, output } => crate::cap::execute(&path, output),
         Commands::Dl { url, output } => crate::dl::execute(url, output),
     }
 }
