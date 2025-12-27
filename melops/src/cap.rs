@@ -157,7 +157,9 @@ fn build_pipeline(model_dir: &Path) -> Result<ParakeetTdt> {
         TensorRTExecutionProvider::default().build(),
         #[cfg(feature = "openvino")]
         OpenVINOExecutionProvider::default()
-            .with_device_type("GPU")
+            .with_device_type("HETERO:GPU,CPU")
+            .with_cache_dir(".cache/ort")
+            .with_precision("FP16")
             .build(),
         #[cfg(feature = "directml")]
         DirectMLExecutionProvider::default().build(),
