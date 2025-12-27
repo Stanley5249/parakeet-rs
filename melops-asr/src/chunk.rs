@@ -2,8 +2,8 @@
 
 use crate::types::AudioBuffer;
 
-/// Default chunk duration in seconds (6 minutes)
-const DEFAULT_CHUNK_DURATION: f32 = 360.0;
+/// Default chunk duration in seconds (4 minutes)
+const DEFAULT_CHUNK_DURATION: f32 = 240.0;
 
 /// Default chunk overlap in seconds
 const DEFAULT_CHUNK_OVERLAP: f32 = 1.0;
