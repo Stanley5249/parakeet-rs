@@ -1187,13 +1187,25 @@ dependencies = [
  "eyre",
  "hf-hub",
  "hound",
+ "melops-asr",
  "melops-dl",
  "ort",
- "parakeet-rs",
  "srtlib",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "melops-asr"
+version = "0.2.6"
+dependencies = [
+ "hound",
+ "ndarray",
+ "ort",
+ "parakeet-rs",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]

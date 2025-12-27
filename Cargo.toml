@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["parakeet-rs", "melops", "melops-dl"]
+members = ["melops", "melops-asr", "melops-dl", "parakeet-rs"]
 
 [workspace.package]
 version = "0.2.6"
@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 melops = { path = "melops" }
+melops-asr = { path = "melops-asr" }
 melops-dl = { path = "melops-dl" }
 parakeet-rs = { path = "parakeet-rs" }
 
@@ -27,6 +28,7 @@ ort = { version = "2.0.0-rc.10", default-features = false }
 rustfft = "6.4.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+thiserror = "2.0.17"
 tokenizers = { version = "0.22.2", default-features = false, features = [
   "onig",
 ] }

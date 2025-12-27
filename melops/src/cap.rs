@@ -3,11 +3,12 @@
 use crate::srt;
 use eyre::{Context, OptionExt, Result};
 use hf_hub::api::sync::Api;
-use hound::WavReader;
+use melops_asr::chunk::ChunkConfig;
+use melops_asr::pipelines::ParakeetTdt;
+use melops_asr::types::AudioBuffer;
 #[allow(unused_imports)]
 use ort::execution_providers::*;
 use ort::session::Session;
-use parakeet_rs::{ParakeetTDT, TimestampMode, Transcriber};
 use srtlib::Subtitles;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -20,17 +21,61 @@ const MODEL_FILES: &[&str] = &[
     "vocab.txt",
 ];
 
-pub fn execute(input: &Path, output: Option<PathBuf>) -> Result<()> {
+/// CLI arguments for caption generation.
+#[derive(clap::Args, Debug)]
+pub struct Args {
+    /// Path to input WAV file
+    pub path: PathBuf,
+
+    /// Output SRT path (default: same as input with .srt extension)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Chunk duration in seconds for long audio (default: 60)
+    #[arg(long)]
+    pub chunk_duration: Option<f32>,
+
+    /// Chunk overlap in seconds (default: 1)
+    #[arg(long)]
+    pub chunk_overlap: Option<f32>,
+}
+
+/// Resolved configuration for caption generation.
+#[derive(Debug)]
+pub struct Config {
+    pub path: PathBuf,
+    pub output: Option<PathBuf>,
+    pub chunk_duration: f32,
+    pub chunk_overlap: f32,
+}
+
+impl TryFrom<Args> for Config {
+    type Error = eyre::Error;
+
+    fn try_from(args: Args) -> Result<Self> {
+        Ok(Self {
+            path: args.path,
+            output: args.output,
+            chunk_duration: args.chunk_duration.unwrap_or(60.0),
+            chunk_overlap: args.chunk_overlap.unwrap_or(1.0),
+        })
+    }
+}
+
+pub fn execute(config: Config) -> Result<()> {
     // Resolve output path
-    let output = output.unwrap_or_else(|| input.with_extension("srt"));
+    let output = config
+        .output
+        .unwrap_or_else(|| config.path.with_extension("srt"));
 
     tracing::info!(
-        input = ?input.display(),
+        input = ?config.path.display(),
         output = ?output.display(),
         "generating captions"
     );
 
-    let subtitles = caption_from_wav_file(input)?;
+    let subtitles =
+        caption_from_wav_file(&config.path, config.chunk_duration, config.chunk_overlap)?;
 
     tracing::info!(path = ?output.display(), "write srt file");
 
@@ -44,21 +89,33 @@ pub fn execute(input: &Path, output: Option<PathBuf>) -> Result<()> {
 }
 
 /// Perform ASR on WAV file and return captions as subtitles.
-fn caption_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
-    log_wav_spec(wav_path)?;
+fn caption_from_wav_file(
+    wav_path: &Path,
+    chunk_duration: f32,
+    chunk_overlap: f32,
+) -> Result<Subtitles> {
+    let buffer = AudioBuffer::from_file(wav_path)
+        .wrap_err_with(|| format!("failed to load audio: {:?}", wav_path.display()))?;
 
     let model_dir = fetch_model()?;
 
     let s = Instant::now();
 
-    let mut model = load_model(&model_dir)?;
+    let mut model = build_pipeline(&model_dir)?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "model loaded");
 
     let s = Instant::now();
 
-    let result = model.transcribe_file(wav_path, Some(TimestampMode::Sentences))?;
+    let chunk_config = ChunkConfig {
+        duration: chunk_duration,
+        overlap: chunk_overlap,
+    };
+
+    let result = model
+        .transcribe_chunked(&buffer, Some(chunk_config))
+        .wrap_err("transcription failed")?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "inference completed");
@@ -66,26 +123,6 @@ fn caption_from_wav_file(wav_path: &Path) -> Result<Subtitles> {
     let subtitles = srt::to_subtitles(&result.tokens);
 
     Ok(subtitles)
-}
-
-/// Log WAV file specification for debugging.
-fn log_wav_spec(path: &Path) -> Result<()> {
-    let reader = WavReader::open(path)
-        .wrap_err_with(|| format!("failed to open audio: {:?}", path.display()))?;
-
-    let spec = reader.spec();
-    let duration = reader.duration() as f32 / spec.sample_rate as f32;
-
-    tracing::debug!(
-        path = ?path.display(),
-        duration_secs = %duration,
-        channels = spec.channels,
-        sample_rate = spec.sample_rate,
-        bits_per_sample = spec.bits_per_sample,
-        format = ?spec.sample_format,
-        "wav spec"
-    );
-    Ok(())
 }
 
 /// Fetch model files from Hugging Face Hub.
@@ -105,7 +142,7 @@ fn fetch_model() -> Result<PathBuf> {
         .map(|path| path.to_path_buf())
 }
 
-/// Load Parakeet model with execution providers configured by Cargo features.
+/// Build execution config with execution providers configured by Cargo features.
 ///
 /// Configures ONNX Runtime session with execution providers in priority order. The first
 /// available provider is used; CPU is always available as fallback.
@@ -121,7 +158,7 @@ fn fetch_model() -> Result<PathBuf> {
 ///
 /// Ensure required hardware, drivers, and runtime dependencies are installed for the
 /// desired provider.
-fn load_model(model_dir: &PathBuf) -> Result<ParakeetTDT> {
+fn build_pipeline(model_dir: &Path) -> Result<ParakeetTdt> {
     tracing::info!(dir = ?model_dir.display(), "loading model");
 
     let builder = Session::builder()?.with_execution_providers([
@@ -139,7 +176,7 @@ fn load_model(model_dir: &PathBuf) -> Result<ParakeetTDT> {
         CoreMLExecutionProvider::default().build(),
     ])?;
 
-    Ok(ParakeetTDT::from_pretrained(model_dir, Some(builder))?)
+    Ok(ParakeetTdt::from_pretrained(model_dir, builder)?)
 }
 
 /// Format seconds as a string with two decimal places.

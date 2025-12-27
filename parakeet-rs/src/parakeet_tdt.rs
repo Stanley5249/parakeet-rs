@@ -4,7 +4,7 @@ use crate::decoder::TranscriptionResult;
 use crate::decoder_tdt::ParakeetTDTDecoder;
 use crate::error::{Error, Result};
 use crate::model_tdt::ParakeetTDTModel;
-use crate::timestamps::{process_timestamps, TimestampMode};
+use crate::timestamps::{TimestampMode, process_timestamps};
 use crate::transcriber::Transcriber;
 use crate::vocab::Vocabulary;
 use ort::session::builder::SessionBuilder;
@@ -87,6 +87,9 @@ impl ParakeetTDT {
         let vocab = Vocabulary::from_file(&vocab_path)?;
         let vocab_size = vocab.size();
 
+        let builder = builder.unwrap_or_else(|| {
+            ort::session::Session::builder().expect("Failed to create default session builder")
+        });
         let model = ParakeetTDTModel::from_pretrained(path, builder, vocab_size)?;
         let decoder = ParakeetTDTDecoder::from_vocab(vocab);
 

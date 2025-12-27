@@ -13,7 +13,7 @@ categories = ["multimedia::audio", "science"]
 eyre.workspace = true
 hound.workspace = true
 ndarray.workspace = true
-ort.workspace = true
+ort = { workspace = true, features = ["std", "ndarray"] }
 rustfft.workspace = true
 serde.workspace = true
 serde_json.workspace = true

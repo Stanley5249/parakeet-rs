@@ -43,14 +43,14 @@
 //! - Channels: Mono (stereo will be converted automatically)
 //! - Bit Depth: 16-bit PCM or 32-bit float
 
-mod audio;
+pub mod audio;
 mod config;
 mod decoder;
-mod decoder_tdt;
+pub mod decoder_tdt;
 mod error;
 mod model;
 mod model_eou;
-mod model_tdt;
+pub mod model_tdt;
 mod parakeet;
 mod parakeet_eou;
 mod parakeet_tdt;
@@ -58,7 +58,7 @@ mod parakeet_tdt;
 pub mod sortformer;
 mod timestamps;
 mod transcriber;
-mod vocab;
+pub mod vocab;
 
 pub use error::{Error, Result};
 pub use parakeet::Parakeet;
@@ -69,6 +69,9 @@ pub use transcriber::*;
 pub use config::{ModelConfig as ModelConfigJson, PreprocessorConfig};
 
 pub use decoder::{ParakeetDecoder, TimedToken, TranscriptionResult};
+pub use decoder_tdt::ParakeetTDTDecoder;
 pub use model::ParakeetModel;
 pub use model_eou::ParakeetEOUModel;
+pub use model_tdt::ParakeetTDTModel;
 pub use parakeet_eou::ParakeetEOU;
+pub use vocab::Vocabulary;

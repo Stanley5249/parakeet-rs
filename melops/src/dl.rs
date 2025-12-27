@@ -6,18 +6,47 @@ use melops_dl::asr::AudioFormat;
 use melops_dl::dl::{DownloadOptions, download};
 use std::path::PathBuf;
 
-pub fn execute(url: String, output_dir: Option<PathBuf>) -> Result<()> {
-    tracing::info!(url, "downloading audio");
+/// CLI arguments for download and caption generation.
+#[derive(clap::Args, Debug)]
+pub struct Args {
+    /// URL to download
+    pub url: String,
+
+    /// Output directory (default: system download directory)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+}
+
+/// Resolved configuration for download and caption generation.
+#[derive(Debug)]
+pub struct Config {
+    pub url: String,
+    pub output_dir: Option<PathBuf>,
+}
+
+impl TryFrom<Args> for Config {
+    type Error = eyre::Error;
+
+    fn try_from(args: Args) -> Result<Self> {
+        Ok(Self {
+            url: args.url,
+            output_dir: args.output,
+        })
+    }
+}
+
+pub fn execute(config: Config) -> Result<()> {
+    tracing::info!(url = config.url, "downloading audio");
 
     let mut opts: DownloadOptions = AudioFormat::Pcm16.into();
 
     // Override output directory if provided
-    if let Some(home) = output_dir.as_deref() {
+    if let Some(home) = config.output_dir.as_deref() {
         opts.paths = Some(opts.paths.expect("paths should be some").with_home(home));
     }
 
     // Download audio
-    let (file_path, _info) = download(&url, opts).wrap_err("failed to download audio")?;
+    let (file_path, _info) = download(&config.url, opts).wrap_err("failed to download audio")?;
 
     // Get actual downloaded file path from post_hook
     let audio_path = file_path.ok_or_eyre("yt-dlp did not return downloaded file path")?;
@@ -40,8 +69,15 @@ pub fn execute(url: String, output_dir: Option<PathBuf>) -> Result<()> {
     // Generate SRT path (same directory and name as audio, but .srt extension)
     let srt_path = audio_path.with_extension("srt");
 
-    // Generate captions using cap module's logic
-    crate::cap::execute(&audio_path, Some(srt_path))
+    // Generate captions using cap module's logic with default chunk config
+    let cap_config = crate::cap::Config {
+        path: audio_path.clone(),
+        output: Some(srt_path),
+        chunk_duration: 30.0,
+        chunk_overlap: 1.0,
+    };
+
+    crate::cap::execute(cap_config)
         .with_note(|| {
             format!(
                 "audio downloaded successfully to: {:?}",

@@ -1,7 +1,7 @@
 //! Integration tests for melops CLI.
 
 use clap::Parser;
-use melops::cli::{Cli, run_cli};
+use melops::cli::{Cli, run};
 
 const URL: &str = "https://youtu.be/jNQXAC9IVRw";
 
@@ -18,7 +18,7 @@ fn dl_downloads_and_transcribes() {
 
     let cli = Cli::parse_from(["mel", "dl", URL, "-o", temp_dir.to_str().unwrap()]);
 
-    run_cli(cli).expect("failed to download and transcribe");
+    run(cli).expect("failed to download and transcribe");
 
     // Verify SRT file was created
     // Expected path: temp_dir/Youtube/jawed/jNQXAC9IVRw/Me_at_the_zoo.srt

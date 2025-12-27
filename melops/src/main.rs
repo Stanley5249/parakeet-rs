@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use eyre::Result;
-use melops::cli::{Cli, run_cli};
+use melops::cli::{Cli, run};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<()> {
@@ -15,5 +15,5 @@ fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    run_cli(Cli::parse())
+    run(Cli::parse())
 }

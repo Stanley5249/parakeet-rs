@@ -17,18 +17,18 @@ dirs.workspace = true
 eyre.workspace = true
 hf-hub.workspace = true
 hound.workspace = true
+melops-asr.workspace = true
 melops-dl.workspace = true
-parakeet-rs.workspace = true
 
 # Re-export ort for direct provider configuration
-ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
+ort = { workspace = true, features = ["download-binaries"] }
 
 # Subtitle
 srtlib = "0.2.0"
 
 # Logging
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3", features = [ "env-filter", "fmt" ] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2.4"
 
 # CLI
@@ -45,7 +45,7 @@ cuda = ["ort/cuda"]
 tensorrt = ["ort/tensorrt"]
 # TensorRT RTX
 # Might break in future, change to "nvrtx" when available
-nv  = ["ort/nv"]
+nv = ["ort/nv"]
 # Intel
 openvino = ["ort/openvino"]
 onednn = ["ort/onednn"]

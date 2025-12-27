@@ -2,7 +2,6 @@
 
 use clap::{Parser, Subcommand};
 use eyre::Result;
-use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "mel")]
@@ -16,33 +15,19 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Generate captions from audio file to SRT subtitles
-    Cap {
-        /// Path to input WAV file
-        path: PathBuf,
-
-        /// Output SRT path (default: same as input with .srt extension)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
+    Cap(crate::cap::Args),
 
     /// Download and generate captions from audio URL
-    Dl {
-        /// URL to download
-        url: String,
-
-        /// Output directory (default: system download directory)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
+    Dl(crate::dl::Args),
 }
 
 /// Execute CLI command - separated for testing.
-pub fn run_cli(cli: Cli) -> Result<()> {
+pub fn run(cli: Cli) -> Result<()> {
     tracing::debug!(?cli, "parsed arguments");
 
     match cli.command {
-        Commands::Cap { path, output } => crate::cap::execute(&path, output),
-        Commands::Dl { url, output } => crate::dl::execute(url, output),
+        Commands::Cap(args) => crate::cap::execute(args.try_into()?),
+        Commands::Dl(args) => crate::dl::execute(args.try_into()?),
     }
 }
 
@@ -54,36 +39,41 @@ mod tests {
     fn parses_run_command() {
         let cli = Cli::parse_from(["mel", "cap", "audio.wav"]);
 
-        assert!(matches!(
-            &cli.command,
-            Commands::Cap { path, output: None }
-            if path == "audio.wav"
-        ));
+        match &cli.command {
+            Commands::Cap(crate::cap::Args {
+                path,
+                output: None,
+                chunk_duration: None,
+                chunk_overlap: None,
+            }) if path.to_str() == Some("audio.wav") => {}
+            _ => panic!("unexpected command: {:?}", cli.command),
+        }
     }
 
     #[test]
     fn parses_run_with_output() {
         let cli = Cli::parse_from(["mel", "cap", "audio.wav", "-o", "output.srt"]);
 
-        assert!(matches!(
-            &cli.command,
-            Commands::Cap { path, output }
-            if path.to_str() == Some("audio.wav")
-            && output.as_deref().is_some_and(|p| p == "output.srt")
-        ));
+        match &cli.command {
+            Commands::Cap(crate::cap::Args {
+                path,
+                output: Some(output),
+                chunk_duration: None,
+                chunk_overlap: None,
+            }) if path.to_str() == Some("audio.wav") && output.to_str() == Some("output.srt") => {}
+            _ => panic!("unexpected command: {:?}", cli.command),
+        }
     }
 
     #[test]
     fn parses_dl_command() {
         let cli = Cli::parse_from(["mel", "dl", "https://example.com/video"]);
 
-        assert!(matches!(
-            &cli.command,
-            Commands::Dl {
-                url,
-                output: None,
-            } if url == "https://example.com/video"
-        ));
+        match &cli.command {
+            Commands::Dl(crate::dl::Args { url, output: None })
+                if url == "https://example.com/video" => {}
+            _ => panic!("unexpected command: {:?}", cli.command),
+        }
     }
 
     #[test]
@@ -96,13 +86,12 @@ mod tests {
             "/tmp/output",
         ]);
 
-        assert!(matches!(
-            &cli.command,
-            Commands::Dl {
+        match &cli.command {
+            Commands::Dl(crate::dl::Args {
                 url,
-                output,
-            } if url == "https://example.com/video" &&
-                 output.as_deref().is_some_and(|p| p == "/tmp/output")
-        ));
+                output: Some(output),
+            }) if url == "https://example.com/video" && output.to_str() == Some("/tmp/output") => {}
+            _ => panic!("unexpected command: {:?}", cli.command),
+        }
     }
 }
