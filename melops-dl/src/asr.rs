@@ -70,6 +70,7 @@ impl From<AudioFormat> for DownloadOptions {
             getcomments: None,
             quiet: None,
             no_warnings: None,
+            keepvideo: Some(true),
         }
     }
 }
@@ -112,6 +113,7 @@ mod tests {
                 getcomments: None,
                 quiet: None,
                 no_warnings: None,
+                keepvideo: Some(true),
             } if format == "ba" => {}
             _ => panic!(),
         }

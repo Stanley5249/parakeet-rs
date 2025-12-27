@@ -124,6 +124,8 @@ pub struct DownloadOptions {
     pub quiet: Option<bool>,
     /// Suppress warnings
     pub no_warnings: Option<bool>,
+    /// Keep video file after post-processing (prevents deletion of original file)
+    pub keepvideo: Option<bool>,
 }
 
 /// Essential metadata from yt-dlp info dict.
@@ -334,7 +336,7 @@ mod tests {
             assert_py_eq(
                 py,
                 py_obj.as_any(),
-                c"{'format': 'bestvideo+bestaudio', 'paths': None, 'outtmpl': None, 'postprocessors': None, 'postprocessor_args': None, 'writeinfojson': False, 'restrictfilenames': None, 'getcomments': None, 'quiet': False, 'no_warnings': None}"
+                c"{'format': 'bestvideo+bestaudio', 'paths': None, 'outtmpl': None, 'postprocessors': None, 'postprocessor_args': None, 'writeinfojson': False, 'restrictfilenames': None, 'getcomments': None, 'quiet': False, 'no_warnings': None, 'keepvideo': None}"
             );
         });
     }
