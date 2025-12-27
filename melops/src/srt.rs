@@ -130,6 +130,44 @@ fn seconds_to_timestamp(seconds: f32) -> Timestamp {
     Timestamp::new(hours, mins, secs, ms)
 }
 
+/// Display preview of subtitles (first and last entries, similar to polars DataFrame).
+pub fn preview_subtitles(subtitles: &Subtitles, head_count: usize, tail_count: usize) -> String {
+    let total = subtitles.len();
+
+    if total == 0 {
+        return "shape: (0 subtitles)\n".to_string();
+    }
+
+    let mut output = format!("shape: ({} subtitles)\n\n", total);
+
+    // Collect subtitles into a vector for indexed access
+    let subs: Vec<&Subtitle> = subtitles.into_iter().collect();
+
+    // If total fits in head + tail, print all
+    if total <= head_count + tail_count {
+        for subtitle in &subs {
+            output.push_str(&format!("{}\n\n", subtitle));
+        }
+    } else {
+        // Show head
+        for subtitle in &subs[..head_count] {
+            output.push_str(&format!("{}\n\n", subtitle));
+        }
+
+        // Show ellipsis
+        let skipped = total - head_count - tail_count;
+        output.push_str(&format!("... ({} subtitles omitted) ...\n\n", skipped));
+
+        // Show tail
+        let tail_start = total - tail_count;
+        for subtitle in &subs[tail_start..] {
+            output.push_str(&format!("{}\n\n", subtitle));
+        }
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

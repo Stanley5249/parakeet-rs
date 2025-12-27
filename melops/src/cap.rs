@@ -1,5 +1,6 @@
 //! Cap subcommand - generate captions from audio file to SRT.
 
+use crate::cli::CaptionConfig;
 use crate::srt;
 use eyre::{Context, OptionExt, Result};
 use hf_hub::api::sync::Api;
@@ -32,7 +33,7 @@ pub struct Args {
     pub output: Option<PathBuf>,
 
     #[command(flatten)]
-    pub chunk_config: ChunkConfig,
+    pub caption_config: CaptionConfig,
 }
 
 /// Resolved configuration for caption generation.
@@ -40,6 +41,7 @@ pub struct Args {
 pub struct Config {
     pub path: PathBuf,
     pub output: Option<PathBuf>,
+    pub preview: bool,
     pub chunk_config: ChunkConfig,
 }
 
@@ -50,7 +52,8 @@ impl TryFrom<Args> for Config {
         Ok(Self {
             path: args.path,
             output: args.output,
-            chunk_config: args.chunk_config,
+            preview: args.caption_config.preview,
+            chunk_config: args.caption_config.chunk_config,
         })
     }
 }
@@ -71,11 +74,14 @@ pub fn execute(config: Config) -> Result<()> {
 
     tracing::info!(path = ?output.display(), "write srt file");
 
-    // Write to stdout
-    print!("{subtitles}");
-
+    // Write to file
     std::fs::write(&output, subtitles.to_string())
         .wrap_err_with(|| format!("failed to write srt: {:?}", output.display()))?;
+
+    // Display preview or full output to stdout
+    if config.preview {
+        print!("{}", srt::preview_subtitles(&subtitles, 3, 3));
+    }
 
     Ok(())
 }

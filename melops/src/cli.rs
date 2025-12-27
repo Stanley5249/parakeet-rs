@@ -2,6 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use eyre::Result;
+use melops_asr::chunk::ChunkConfig;
 
 #[derive(Debug, Parser)]
 #[command(name = "mel")]
@@ -19,6 +20,17 @@ pub enum Commands {
 
     /// Download and generate captions from audio URL
     Dl(crate::dl::Args),
+}
+
+/// Shared caption generation options.
+#[derive(clap::Args, Debug)]
+pub struct CaptionConfig {
+    /// Show preview of first and last subtitles
+    #[arg(long)]
+    pub preview: bool,
+
+    #[command(flatten)]
+    pub chunk_config: ChunkConfig,
 }
 
 /// Execute CLI command - separated for testing.

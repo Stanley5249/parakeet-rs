@@ -7,6 +7,8 @@ use melops_dl::asr::AudioFormat;
 use melops_dl::dl::{DownloadOptions, download};
 use std::path::PathBuf;
 
+use crate::cli::CaptionConfig;
+
 /// CLI arguments for download and caption generation.
 #[derive(clap::Args, Debug)]
 pub struct Args {
@@ -18,7 +20,7 @@ pub struct Args {
     pub output: Option<PathBuf>,
 
     #[command(flatten)]
-    pub chunk_config: ChunkConfig,
+    pub caption_config: CaptionConfig,
 }
 
 /// Resolved configuration for download and caption generation.
@@ -26,6 +28,7 @@ pub struct Args {
 pub struct Config {
     pub url: String,
     pub output_dir: Option<PathBuf>,
+    pub preview: bool,
     pub chunk_config: ChunkConfig,
 }
 
@@ -36,7 +39,8 @@ impl TryFrom<Args> for Config {
         Ok(Self {
             url: args.url,
             output_dir: args.output,
-            chunk_config: args.chunk_config,
+            preview: args.caption_config.preview,
+            chunk_config: args.caption_config.chunk_config,
         })
     }
 }
@@ -79,6 +83,7 @@ pub fn execute(config: Config) -> Result<()> {
     let cap_config = crate::cap::Config {
         path: audio_path.clone(),
         output: Some(srt_path),
+        preview: config.preview,
         chunk_config: config.chunk_config,
     };
 
