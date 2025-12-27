@@ -10,10 +10,12 @@ license.workspace = true
 [dependencies]
 parakeet-rs.workspace = true
 
+clap.workspace = true
 hound.workspace = true
 ndarray.workspace = true
 ort = { workspace = true, features = ["std", "ndarray"] }
 thiserror.workspace = true
+
 tracing = "0.1.44"
 
 [dev-dependencies]

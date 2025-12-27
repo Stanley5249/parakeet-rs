@@ -1200,6 +1200,7 @@ dependencies = [
 name = "melops-asr"
 version = "0.2.6"
 dependencies = [
+ "clap",
  "hound",
  "ndarray",
  "ort",

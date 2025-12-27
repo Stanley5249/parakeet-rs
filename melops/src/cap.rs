@@ -31,13 +31,8 @@ pub struct Args {
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Chunk duration in seconds for long audio (default: 60)
-    #[arg(long)]
-    pub chunk_duration: Option<f32>,
-
-    /// Chunk overlap in seconds (default: 1)
-    #[arg(long)]
-    pub chunk_overlap: Option<f32>,
+    #[command(flatten)]
+    pub chunk_config: ChunkConfig,
 }
 
 /// Resolved configuration for caption generation.
@@ -45,8 +40,7 @@ pub struct Args {
 pub struct Config {
     pub path: PathBuf,
     pub output: Option<PathBuf>,
-    pub chunk_duration: f32,
-    pub chunk_overlap: f32,
+    pub chunk_config: ChunkConfig,
 }
 
 impl TryFrom<Args> for Config {
@@ -56,8 +50,7 @@ impl TryFrom<Args> for Config {
         Ok(Self {
             path: args.path,
             output: args.output,
-            chunk_duration: args.chunk_duration.unwrap_or(60.0),
-            chunk_overlap: args.chunk_overlap.unwrap_or(1.0),
+            chunk_config: args.chunk_config,
         })
     }
 }
@@ -74,8 +67,7 @@ pub fn execute(config: Config) -> Result<()> {
         "generating captions"
     );
 
-    let subtitles =
-        caption_from_wav_file(&config.path, config.chunk_duration, config.chunk_overlap)?;
+    let subtitles = caption_from_wav_file(&config.path, config.chunk_config)?;
 
     tracing::info!(path = ?output.display(), "write srt file");
 
@@ -89,11 +81,7 @@ pub fn execute(config: Config) -> Result<()> {
 }
 
 /// Perform ASR on WAV file and return captions as subtitles.
-fn caption_from_wav_file(
-    wav_path: &Path,
-    chunk_duration: f32,
-    chunk_overlap: f32,
-) -> Result<Subtitles> {
+fn caption_from_wav_file(wav_path: &Path, chunk_config: ChunkConfig) -> Result<Subtitles> {
     let buffer = AudioBuffer::from_file(wav_path)
         .wrap_err_with(|| format!("failed to load audio: {:?}", wav_path.display()))?;
 
@@ -107,11 +95,6 @@ fn caption_from_wav_file(
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "model loaded");
 
     let s = Instant::now();
-
-    let chunk_config = ChunkConfig {
-        duration: chunk_duration,
-        overlap: chunk_overlap,
-    };
 
     let result = model
         .transcribe_chunked(&buffer, Some(chunk_config))

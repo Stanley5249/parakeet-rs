@@ -34,6 +34,12 @@ pub fn run(cli: Cli) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use melops_asr::chunk::ChunkConfig;
+
+    fn assert_default_chunk_config(config: &ChunkConfig) {
+        assert!((config.duration - 360.0).abs() < 0.001);
+        assert!((config.overlap - 1.0).abs() < 0.001);
+    }
 
     #[test]
     fn parses_run_command() {
@@ -43,9 +49,10 @@ mod tests {
             Commands::Cap(crate::cap::Args {
                 path,
                 output: None,
-                chunk_duration: None,
-                chunk_overlap: None,
-            }) if path.to_str() == Some("audio.wav") => {}
+                chunk_config,
+            }) if path.to_str() == Some("audio.wav") => {
+                assert_default_chunk_config(chunk_config);
+            }
             _ => panic!("unexpected command: {:?}", cli.command),
         }
     }
@@ -58,9 +65,10 @@ mod tests {
             Commands::Cap(crate::cap::Args {
                 path,
                 output: Some(output),
-                chunk_duration: None,
-                chunk_overlap: None,
-            }) if path.to_str() == Some("audio.wav") && output.to_str() == Some("output.srt") => {}
+                chunk_config,
+            }) if path.to_str() == Some("audio.wav") && output.to_str() == Some("output.srt") => {
+                assert_default_chunk_config(chunk_config);
+            }
             _ => panic!("unexpected command: {:?}", cli.command),
         }
     }
@@ -70,8 +78,13 @@ mod tests {
         let cli = Cli::parse_from(["mel", "dl", "https://example.com/video"]);
 
         match &cli.command {
-            Commands::Dl(crate::dl::Args { url, output: None })
-                if url == "https://example.com/video" => {}
+            Commands::Dl(crate::dl::Args {
+                url,
+                output: None,
+                chunk_config,
+            }) if url == "https://example.com/video" => {
+                assert_default_chunk_config(chunk_config);
+            }
             _ => panic!("unexpected command: {:?}", cli.command),
         }
     }
@@ -90,7 +103,10 @@ mod tests {
             Commands::Dl(crate::dl::Args {
                 url,
                 output: Some(output),
-            }) if url == "https://example.com/video" && output.to_str() == Some("/tmp/output") => {}
+                chunk_config,
+            }) if url == "https://example.com/video" && output.to_str() == Some("/tmp/output") => {
+                assert_default_chunk_config(chunk_config);
+            }
             _ => panic!("unexpected command: {:?}", cli.command),
         }
     }

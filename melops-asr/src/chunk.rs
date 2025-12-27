@@ -2,20 +2,29 @@
 
 use crate::types::AudioBuffer;
 
+/// Default chunk duration in seconds (6 minutes)
+const DEFAULT_CHUNK_DURATION: f32 = 360.0;
+
+/// Default chunk overlap in seconds
+const DEFAULT_CHUNK_OVERLAP: f32 = 1.0;
+
 /// Configuration for audio chunking.
-#[derive(Debug, Clone, Copy)]
+#[derive(clap::Args, Clone, Copy, Debug)]
 pub struct ChunkConfig {
-    /// Duration of each chunk in seconds
+    /// Chunk duration in seconds for long audio
+    #[arg(long, default_value_t = DEFAULT_CHUNK_DURATION)]
     pub duration: f32,
-    /// Overlap between chunks in seconds (for deduplication)
+
+    /// Chunk overlap in seconds
+    #[arg(long, default_value_t = DEFAULT_CHUNK_OVERLAP)]
     pub overlap: f32,
 }
 
 impl Default for ChunkConfig {
     fn default() -> Self {
         Self {
-            duration: 60.0,
-            overlap: 1.0,
+            duration: DEFAULT_CHUNK_DURATION,
+            overlap: DEFAULT_CHUNK_OVERLAP,
         }
     }
 }
@@ -125,14 +134,6 @@ mod tests {
         assert!((chunks[0].offset_sec - 0.0).abs() < 0.001);
         assert!((chunks[1].offset_sec - 59.0).abs() < 0.001);
         assert!((chunks[2].offset_sec - 118.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn chunk_config_default() {
-        let config = ChunkConfig::default();
-
-        assert!((config.duration - 60.0).abs() < 0.001);
-        assert!((config.overlap - 1.0).abs() < 0.001);
     }
 
     #[test]

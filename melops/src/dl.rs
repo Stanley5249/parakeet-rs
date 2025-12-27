@@ -2,6 +2,7 @@
 
 use color_eyre::Section;
 use eyre::{Context, OptionExt, Result, eyre};
+use melops_asr::chunk::ChunkConfig;
 use melops_dl::asr::AudioFormat;
 use melops_dl::dl::{DownloadOptions, download};
 use std::path::PathBuf;
@@ -15,6 +16,9 @@ pub struct Args {
     /// Output directory (default: system download directory)
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    #[command(flatten)]
+    pub chunk_config: ChunkConfig,
 }
 
 /// Resolved configuration for download and caption generation.
@@ -22,6 +26,7 @@ pub struct Args {
 pub struct Config {
     pub url: String,
     pub output_dir: Option<PathBuf>,
+    pub chunk_config: ChunkConfig,
 }
 
 impl TryFrom<Args> for Config {
@@ -31,6 +36,7 @@ impl TryFrom<Args> for Config {
         Ok(Self {
             url: args.url,
             output_dir: args.output,
+            chunk_config: args.chunk_config,
         })
     }
 }
@@ -69,12 +75,11 @@ pub fn execute(config: Config) -> Result<()> {
     // Generate SRT path (same directory and name as audio, but .srt extension)
     let srt_path = audio_path.with_extension("srt");
 
-    // Generate captions using cap module's logic with default chunk config
+    // Generate captions using cap module's logic
     let cap_config = crate::cap::Config {
         path: audio_path.clone(),
         output: Some(srt_path),
-        chunk_duration: 30.0,
-        chunk_overlap: 1.0,
+        chunk_config: config.chunk_config,
     };
 
     crate::cap::execute(cap_config)
