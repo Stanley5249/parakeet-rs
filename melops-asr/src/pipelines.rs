@@ -7,9 +7,12 @@ use crate::models::tdt::TdtModel;
 use crate::preprocessor::ParakeetPreprocessor;
 use crate::traits::{AsrModel, AudioPreprocessor, Detokenizer};
 use crate::types::{AudioBuffer, Token, Transcription};
+use eyre::{OptionExt, Result as EyreResult, WrapErr};
+use hf_hub::CacheRepo;
+use hf_hub::api::sync::ApiRepo;
 use ort::session::builder::SessionBuilder;
 use parakeet_rs::Vocabulary;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Parakeet TDT captioning pipeline with chunking support.
 ///
@@ -21,38 +24,90 @@ pub struct ParakeetTdt {
     detokenizer: SentencePieceDetokenizer,
 }
 
+pub trait ModelRepo {
+    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf>;
+
+    /// Try resolving multiple file names, return first successful match
+    fn resolve_any<I, S>(&self, candidates: I) -> EyreResult<PathBuf>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        candidates
+            .into_iter()
+            .find_map(|name| self.resolve(name.as_ref()).ok())
+            .ok_or_eyre("no model found from candidates")
+    }
+}
+
+impl ModelRepo for &Path {
+    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
+        self.join(file_name)
+            .canonicalize()
+            .wrap_err(format!("failed to resolve model: {file_name}"))
+    }
+}
+
+impl ModelRepo for &CacheRepo {
+    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
+        self.get(file_name)
+            .ok_or_eyre(format!("model not found in cache: {file_name}"))
+    }
+}
+
+impl ModelRepo for &ApiRepo {
+    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
+        self.get(file_name)
+            .wrap_err(format!("failed to download from api: {file_name}"))
+    }
+}
+
 impl ParakeetTdt {
-    /// Load TDT pipeline from a pretrained directory.
+    /// Load TDT pipeline from a model repository.
     ///
     /// # Arguments
     ///
-    /// * `model_dir` - Path to directory containing model files:
-    ///   - `encoder-model.onnx`
-    ///   - `decoder_joint-model.onnx`
-    ///   - `vocab.txt`
-    /// * `builder` - ONNX session builder for configuring execution providers
-    pub fn from_pretrained<P: AsRef<Path>>(model_dir: P, builder: SessionBuilder) -> Result<Self> {
-        let path = model_dir.as_ref();
+    /// * `repo` - Model repository (local path, HF cache, or HF API)
+    /// * `session_builder` - ONNX session builder for configuring execution providers
+    pub fn new<R: ModelRepo>(repo: R, session_builder: SessionBuilder) -> EyreResult<Self> {
+        // Resolve model paths with priority fallback
+        let encoder_path = repo.resolve_any([
+            "encoder-model.onnx",
+            "encoder.onnx",
+            "encoder-model.int8.onnx",
+        ])?;
 
-        // Preprocessor (hardcoded config for TDT)
+        let decoder_path = repo.resolve_any([
+            "decoder_joint-model.onnx",
+            "decoder_joint.onnx",
+            "decoder_joint-model.int8.onnx",
+        ])?;
+
+        let vocab_path = repo.resolve("vocab.txt")?;
+
+        // Create ONNX sessions
+        let encoder_session = session_builder
+            .clone()
+            .commit_from_file(&encoder_path)
+            .wrap_err("failed to load encoder session")?;
+
+        let decoder_session = session_builder
+            .commit_from_file(&decoder_path)
+            .wrap_err("failed to load decoder session")?;
+
+        // Load preprocessor and detokenizer
         let preprocessor = ParakeetPreprocessor::tdt();
+        let vocabulary =
+            Vocabulary::from_file(&vocab_path).wrap_err("failed to load vocabulary")?;
 
-        // Load vocabulary
-        let vocab_path = path.join("vocab.txt");
-        let vocabulary = Vocabulary::from_file(&vocab_path)?;
-
-        // Detokenizer loads vocab first
-        let detokenizer = SentencePieceDetokenizer::from_pretrained(
+        let detokenizer = SentencePieceDetokenizer::new(
             vocabulary,
             preprocessor.config().hop_length,
             preprocessor.config().sampling_rate,
         );
 
-        // Get vocab_size from detokenizer to pass to model
-        let vocab_size = detokenizer.vocab_size();
-
-        // Model loads ONNX files with vocab_size
-        let model = TdtModel::from_pretrained(path, builder, vocab_size)?;
+        // Create model from sessions
+        let model = TdtModel::new(encoder_session, decoder_session, detokenizer.vocab_size());
 
         Ok(Self {
             preprocessor,

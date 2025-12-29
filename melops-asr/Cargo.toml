@@ -11,6 +11,8 @@ license.workspace = true
 parakeet-rs.workspace = true
 
 clap.workspace = true
+eyre.workspace = true
+hf-hub.workspace = true
 hound.workspace = true
 ndarray.workspace = true
 ort = { workspace = true, features = ["std", "ndarray", "tracing"] }

@@ -26,8 +26,8 @@ pub struct SentencePieceDetokenizer {
 }
 
 impl SentencePieceDetokenizer {
-    /// Create detokenizer from pretrained vocabulary.
-    pub fn from_pretrained(vocab: Vocabulary, hop_length: usize, sample_rate: usize) -> Self {
+    /// Create detokenizer from vocabulary.
+    pub fn new(vocab: Vocabulary, hop_length: usize, sample_rate: usize) -> Self {
         let decoder = ParakeetTDTDecoder::from_vocab(vocab.clone());
         Self {
             decoder,

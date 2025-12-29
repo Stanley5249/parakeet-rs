@@ -167,7 +167,7 @@ fn build_pipeline(model_dir: &Path) -> Result<ParakeetTdt> {
         CoreMLExecutionProvider::default().build(),
     ])?;
 
-    Ok(ParakeetTdt::from_pretrained(model_dir, builder)?)
+    ParakeetTdt::new(model_dir, builder)
 }
 
 /// Format seconds as a string with two decimal places.

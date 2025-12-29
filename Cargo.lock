@@ -1201,6 +1201,8 @@ name = "melops-asr"
 version = "0.2.6"
 dependencies = [
  "clap",
+ "eyre",
+ "hf-hub",
  "hound",
  "ndarray",
  "ort",

@@ -4,9 +4,9 @@ use crate::detokenizer::TdtOutput;
 use crate::error::{Error, Result};
 use crate::traits::AsrModel;
 use ndarray::{Array1, Array2, Array3, s};
+use ort::inputs;
 use ort::session::Session;
-use ort::session::builder::SessionBuilder;
-use std::path::{Path, PathBuf};
+use ort::value::Value;
 
 /// TDT model for ASR inference.
 ///
@@ -19,31 +19,19 @@ pub struct TdtModel {
 }
 
 impl TdtModel {
-    /// Load TDT model from pretrained directory.
+    /// Create TDT model from ONNX sessions.
     ///
     /// # Arguments
     ///
-    /// * `model_dir` - Path to directory containing ONNX files
-    /// * `builder` - Session builder for execution provider config
+    /// * `encoder` - Encoder ONNX session
+    /// * `decoder_joint` - Decoder/joint ONNX session
     /// * `vocab_size` - Vocabulary size from detokenizer
-    pub fn from_pretrained<P: AsRef<Path>>(
-        model_dir: P,
-        builder: SessionBuilder,
-        vocab_size: usize,
-    ) -> Result<Self> {
-        let model_dir = model_dir.as_ref();
-
-        let encoder_path = find_encoder(model_dir)?;
-        let decoder_joint_path = find_decoder_joint(model_dir)?;
-
-        let encoder = builder.clone().commit_from_file(&encoder_path)?;
-        let decoder_joint = builder.commit_from_file(&decoder_joint_path)?;
-
-        Ok(Self {
+    pub fn new(encoder: Session, decoder_joint: Session, vocab_size: usize) -> Self {
+        Self {
             encoder,
             decoder_joint,
             vocab_size,
-        })
+        }
     }
 
     fn run_encoder(&mut self, features: &Array2<f32>) -> Result<(Array3<f32>, i64)> {
@@ -58,15 +46,14 @@ impl TdtModel {
             .map_err(|e| Error::Model(format!("Failed to reshape encoder input: {e}")))?
             .to_owned();
 
-        let input_length = Array1::from_vec(vec![time_steps as i64]);
+        let input_length = Array1::from(vec![time_steps as i64]);
 
-        let input_value = ort::value::Value::from_array(input)?;
-        let length_value = ort::value::Value::from_array(input_length)?;
+        let input_value = inputs!(
+            "audio_signal" => Value::from_array(input)?,
+            "length" => Value::from_array(input_length)?
+        );
 
-        let outputs = self.encoder.run(ort::inputs!(
-            "audio_signal" => input_value,
-            "length" => length_value
-        ))?;
+        let outputs = self.encoder.run(input_value)?;
 
         let encoder_out = &outputs["outputs"];
         let encoder_lens = &outputs["encoded_lengths"];
@@ -129,7 +116,7 @@ impl TdtModel {
             let targets = Array2::from_shape_vec((1, 1), vec![last_emitted_token])
                 .map_err(|e| Error::Model(format!("Failed to create targets: {e}")))?;
 
-            let outputs = self.decoder_joint.run(ort::inputs!(
+            let outputs = self.decoder_joint.run(inputs!(
                 "encoder_outputs" => ort::value::Value::from_array(frame_reshaped)?,
                 "targets" => ort::value::Value::from_array(targets)?,
                 "target_length" => ort::value::Value::from_array(Array1::from_vec(vec![1i32]))?,
@@ -221,52 +208,4 @@ impl AsrModel for TdtModel {
             durations,
         })
     }
-}
-
-fn find_encoder(dir: &Path) -> Result<PathBuf> {
-    let candidates = [
-        "encoder-model.onnx",
-        "encoder.onnx",
-        "encoder-model.int8.onnx",
-    ];
-    for candidate in &candidates {
-        let path = dir.join(candidate);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(name) = path.file_name().and_then(|s| s.to_str())
-                && name.starts_with("encoder")
-                && name.ends_with(".onnx")
-            {
-                return Ok(path);
-            }
-        }
-    }
-    Err(Error::Model(format!(
-        "No encoder model found in {}",
-        dir.display()
-    )))
-}
-
-fn find_decoder_joint(dir: &Path) -> Result<PathBuf> {
-    let candidates = [
-        "decoder_joint-model.onnx",
-        "decoder_joint-model.int8.onnx",
-        "decoder_joint.onnx",
-        "decoder-model.onnx",
-    ];
-    for candidate in &candidates {
-        let path = dir.join(candidate);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-    Err(Error::Model(format!(
-        "No decoder_joint model found in {}",
-        dir.display()
-    )))
 }
