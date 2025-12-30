@@ -1,8 +1,8 @@
 //! Audio preprocessor for Parakeet models.
 
+use crate::audio::SAMPLE_RATE;
 use crate::error::Result;
 use crate::traits::AudioPreprocessor;
-use crate::types::AudioBuffer;
 use ndarray::Array2;
 use parakeet_rs::{PreprocessorConfig, audio};
 
@@ -42,11 +42,11 @@ impl ParakeetPreprocessor {
 impl AudioPreprocessor for ParakeetPreprocessor {
     type Features = Array2<f32>;
 
-    fn preprocess(&self, audio: &AudioBuffer) -> Result<Self::Features> {
+    fn preprocess(&self, audio: &[f32]) -> Result<Self::Features> {
         let features = audio::extract_features_raw(
-            audio.as_slice().to_vec(),
-            crate::types::SAMPLE_RATE,
-            1, // Already mono from AudioBuffer
+            audio.to_vec(),
+            SAMPLE_RATE,
+            1, // Already mono
             &self.config,
         )?;
         Ok(features)

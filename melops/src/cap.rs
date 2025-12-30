@@ -2,25 +2,20 @@
 
 use crate::cli::CaptionConfig;
 use crate::srt;
-use eyre::{Context, OptionExt, Result};
+use eyre::{Context, Result};
 use hf_hub::api::sync::Api;
+use melops_asr::audio::read_audio_mono;
 use melops_asr::chunk::ChunkConfig;
 use melops_asr::pipelines::ParakeetTdt;
-use melops_asr::types::AudioBuffer;
 #[allow(unused_imports)]
 use ort::execution_providers::*;
 use ort::session::Session;
+use ort::session::builder::SessionBuilder;
 use srtlib::Subtitles;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 const MODEL_ID: &str = "istupakov/parakeet-tdt-0.6b-v3-onnx";
-const MODEL_FILES: &[&str] = &[
-    "encoder-model.onnx",
-    "encoder-model.onnx.data",
-    "decoder_joint-model.onnx",
-    "vocab.txt",
-];
 
 /// CLI arguments for caption generation.
 #[derive(clap::Args, Debug)]
@@ -88,47 +83,35 @@ pub fn execute(config: Config) -> Result<()> {
 
 /// Perform ASR on WAV file and return captions as subtitles.
 fn caption_from_wav_file(wav_path: &Path, chunk_config: ChunkConfig) -> Result<Subtitles> {
-    let buffer = AudioBuffer::from_file(wav_path)
+    let audio = read_audio_mono(wav_path)
         .wrap_err_with(|| format!("failed to load audio: {:?}", wav_path.display()))?;
 
-    let model_dir = fetch_model()?;
+    tracing::info!("locating model");
+    let api = Api::new()?;
+    let repo = api.model(MODEL_ID.to_string());
 
     let s = Instant::now();
 
-    let mut model = build_pipeline(&model_dir)?;
+    tracing::info!("loading model");
+
+    let builder = build_session()?;
+    let mut model = ParakeetTdt::from_repo(&repo, builder)?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "model loaded");
 
     let s = Instant::now();
 
-    let result = model
-        .transcribe_chunked(&buffer, Some(chunk_config))
+    let tokens = model
+        .transcribe_chunked(&audio, chunk_config)
         .wrap_err("transcription failed")?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "inference completed");
 
-    let subtitles = srt::to_subtitles(&result.tokens);
+    let subtitles = srt::to_subtitles(&tokens);
 
     Ok(subtitles)
-}
-
-/// Fetch model files from Hugging Face Hub.
-fn fetch_model() -> Result<PathBuf> {
-    tracing::info!("locating model");
-
-    let api = Api::new()?;
-    let repo = api.model(MODEL_ID.to_string());
-
-    MODEL_FILES
-        .iter()
-        .map(|file| repo.get(file))
-        .try_fold(None, |_, res| res.map(Some))?
-        .ok_or_eyre("no model files specified")?
-        .parent()
-        .ok_or_eyre("failed to get model directory")
-        .map(|path| path.to_path_buf())
 }
 
 /// Build execution config with execution providers configured by Cargo features.
@@ -147,10 +130,8 @@ fn fetch_model() -> Result<PathBuf> {
 ///
 /// Ensure required hardware, drivers, and runtime dependencies are installed for the
 /// desired provider.
-fn build_pipeline(model_dir: &Path) -> Result<ParakeetTdt> {
-    tracing::info!(dir = ?model_dir.display(), "loading model");
-
-    let builder = Session::builder()?.with_execution_providers([
+fn build_session() -> Result<SessionBuilder> {
+    Ok(Session::builder()?.with_execution_providers([
         #[cfg(feature = "cuda")]
         CUDAExecutionProvider::default().build(),
         #[cfg(feature = "tensorrt")]
@@ -165,9 +146,7 @@ fn build_pipeline(model_dir: &Path) -> Result<ParakeetTdt> {
         DirectMLExecutionProvider::default().build(),
         #[cfg(feature = "coreml")]
         CoreMLExecutionProvider::default().build(),
-    ])?;
-
-    ParakeetTdt::new(model_dir, builder)
+    ])?)
 }
 
 /// Format seconds as a string with two decimal places.

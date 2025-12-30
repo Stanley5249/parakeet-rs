@@ -30,6 +30,7 @@
 //! println!("{}", result.text);
 //! ```
 
+pub mod audio;
 pub mod chunk;
 pub mod detokenizer;
 pub mod error;

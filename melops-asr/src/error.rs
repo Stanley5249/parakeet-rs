@@ -25,6 +25,10 @@ pub enum Error {
     #[error("chunking error: {0}")]
     Chunking(String),
 
+    /// Detokenization error
+    #[error("detokenization error: invalid token ID {0}")]
+    InvalidTokenId(usize),
+
     /// ONNX Runtime error
     #[error(transparent)]
     Ort(#[from] ort::Error),
