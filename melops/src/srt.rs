@@ -1,7 +1,10 @@
-//! SRT subtitle conversion utilities
+//! SRT subtitle conversion utilities.
+//!
+//! Converts ASR tokens with timestamps into SRT subtitle format. Handles segmentation
+//! by sentence boundaries, duration limits, and character limits for readable captions.
 
 use melops_asr::types::Token;
-use srtlib::{Subtitle, Subtitles, Timestamp};
+use srtlib::{Subtitle, Timestamp};
 
 /// Maximum duration for a single subtitle in seconds
 const MAX_SUBTITLE_DURATION: f32 = 5.0;
@@ -10,22 +13,20 @@ const MAX_SUBTITLE_DURATION: f32 = 5.0;
 const MAX_CHARS_PER_SUBTITLE: usize = 80;
 
 /// Convert Tokens to SRT Subtitles, grouping by sentences or time windows.
-pub fn to_subtitles(tokens: &[Token]) -> Subtitles {
+pub fn to_subtitles(tokens: &[Token]) -> Vec<Subtitle> {
     let segments = group_into_segments(tokens);
 
-    Subtitles::new_from_vec(
-        (1..)
-            .zip(segments)
-            .map(|(i, segment)| {
-                Subtitle::new(
-                    i,
-                    seconds_to_timestamp(segment.start),
-                    seconds_to_timestamp(segment.end),
-                    segment.text,
-                )
-            })
-            .collect(),
-    )
+    (1..)
+        .zip(segments)
+        .map(|(i, segment)| {
+            Subtitle::new(
+                i,
+                seconds_to_timestamp(segment.start),
+                seconds_to_timestamp(segment.end),
+                segment.text,
+            )
+        })
+        .collect()
 }
 
 /// A subtitle segment with combined text and timing.
@@ -130,42 +131,52 @@ fn seconds_to_timestamp(seconds: f32) -> Timestamp {
     Timestamp::new(hours, mins, secs, ms)
 }
 
-/// Display preview of subtitles (first and last entries, similar to polars DataFrame).
-pub fn preview_subtitles(subtitles: &Subtitles, head_count: usize, tail_count: usize) -> String {
+/// Format subtitles as SRT file content.
+///
+/// Joins subtitle entries with double newlines as required by SRT format.
+pub fn display_subtitle(subtitles: &[Subtitle]) -> String {
+    subtitles
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// Display preview of subtitles (first and last entries).
+///
+/// Shows first `head_count` and last `tail_count` subtitles with ellipsis separator.
+/// If total subtitles fit within `head_count + tail_count`, displays all.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Show first 2 and last 2 subtitles
+/// let preview = preview_subtitles(&subtitles, 2, 2);
+/// ```
+pub fn preview_subtitles(subtitles: &[Subtitle], head_count: usize, tail_count: usize) -> String {
     let total = subtitles.len();
-
-    if total == 0 {
-        return "shape: (0 subtitles)\n".to_string();
-    }
-
-    let mut output = format!("shape: ({} subtitles)\n\n", total);
-
-    // Collect subtitles into a vector for indexed access
-    let subs: Vec<&Subtitle> = subtitles.into_iter().collect();
 
     // If total fits in head + tail, print all
     if total <= head_count + tail_count {
-        for subtitle in &subs {
-            output.push_str(&format!("{}\n\n", subtitle));
-        }
+        display_subtitle(subtitles)
     } else {
+        let mut out = Vec::new();
+
         // Show head
-        for subtitle in &subs[..head_count] {
-            output.push_str(&format!("{}\n\n", subtitle));
-        }
+        out.extend(subtitles[0..head_count].iter().map(|s| s.to_string()));
 
         // Show ellipsis
-        let skipped = total - head_count - tail_count;
-        output.push_str(&format!("... ({} subtitles omitted) ...\n\n", skipped));
+        out.push("...".to_string());
 
         // Show tail
-        let tail_start = total - tail_count;
-        for subtitle in &subs[tail_start..] {
-            output.push_str(&format!("{}\n\n", subtitle));
-        }
-    }
+        out.extend(
+            subtitles[(total - tail_count)..total]
+                .iter()
+                .map(|s| s.to_string()),
+        );
 
-    output
+        out.join("\n\n")
+    }
 }
 
 #[cfg(test)]

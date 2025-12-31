@@ -1,7 +1,7 @@
 //! Cap subcommand - generate captions from audio file to SRT.
 
 use crate::cli::CaptionConfig;
-use crate::srt;
+use crate::srt::{self, display_subtitle};
 use eyre::{Context, Result};
 use hf_hub::api::sync::Api;
 use melops_asr::audio::read_audio_mono;
@@ -11,7 +11,7 @@ use melops_asr::pipelines::ParakeetTdt;
 use ort::execution_providers::*;
 use ort::session::Session;
 use ort::session::builder::SessionBuilder;
-use srtlib::Subtitles;
+use srtlib::Subtitle;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -70,19 +70,19 @@ pub fn execute(config: Config) -> Result<()> {
     tracing::info!(path = ?output.display(), "write srt file");
 
     // Write to file
-    std::fs::write(&output, subtitles.to_string())
+    std::fs::write(&output, display_subtitle(&subtitles))
         .wrap_err_with(|| format!("failed to write srt: {:?}", output.display()))?;
 
     // Display preview or full output to stdout
     if config.preview {
-        print!("{}", srt::preview_subtitles(&subtitles, 3, 3));
+        print!("{}", srt::preview_subtitles(&subtitles, 2, 2));
     }
 
     Ok(())
 }
 
 /// Perform ASR on WAV file and return captions as subtitles.
-fn caption_from_wav_file(wav_path: &Path, chunk_config: ChunkConfig) -> Result<Subtitles> {
+fn caption_from_wav_file(wav_path: &Path, chunk_config: ChunkConfig) -> Result<Vec<Subtitle>> {
     let audio = read_audio_mono(wav_path)
         .wrap_err_with(|| format!("failed to load audio: {:?}", wav_path.display()))?;
 
