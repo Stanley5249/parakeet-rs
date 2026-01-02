@@ -10,7 +10,6 @@ license.workspace = true
 [dependencies]
 parakeet-rs.workspace = true
 
-clap.workspace = true
 eyre.workspace = true
 hf-hub.workspace = true
 hound.workspace = true

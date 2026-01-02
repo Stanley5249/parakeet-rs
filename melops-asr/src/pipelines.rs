@@ -4,48 +4,50 @@ use crate::detokenizer::SentencePieceDetokenizer;
 use crate::models::tdt::TdtModel;
 use crate::preprocessor::ParakeetPreprocessor;
 use crate::traits::AsrPipeline;
-use eyre::{OptionExt, Result as EyreResult, WrapErr};
+use eyre::{ContextCompat, OptionExt, Result as EyreResult, WrapErr};
 use hf_hub::CacheRepo;
 use hf_hub::api::sync::ApiRepo;
 use ort::session::builder::SessionBuilder;
 use parakeet_rs::Vocabulary;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-pub trait ModelRepo {
-    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf>;
+/// Model repository sources.
+///
+/// Enum containing different types of model repositories.
+/// Replaces the previous ModelRepo trait for simpler usage.
+#[derive(Debug)]
+pub enum ModelRepo {
+    /// Local filesystem path
+    Path(PathBuf),
+    /// HuggingFace cache repository
+    Cache(CacheRepo),
+    /// HuggingFace API repository
+    Api(ApiRepo),
+}
 
-    /// Try resolving multiple file names, return first successful match
-    fn resolve_any<I, S>(&self, candidates: I) -> EyreResult<PathBuf>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
+impl ModelRepo {
+    /// Resolve a file name to its full path in this repository.
+    pub fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
+        match self {
+            ModelRepo::Path(path) => path
+                .join(file_name)
+                .canonicalize()
+                .wrap_err(format!("failed to resolve model: {file_name}")),
+            ModelRepo::Cache(cache_repo) => cache_repo
+                .get(file_name)
+                .wrap_err(format!("failed to download from cache: {file_name}")),
+            ModelRepo::Api(api_repo) => api_repo
+                .get(file_name)
+                .wrap_err(format!("failed to download from api: {file_name}")),
+        }
+    }
+
+    /// Try resolving multiple file names, return first successful match.
+    pub fn resolve_any(&self, candidates: &[&str]) -> EyreResult<PathBuf> {
         candidates
-            .into_iter()
-            .find_map(|name| self.resolve(name.as_ref()).ok())
+            .iter()
+            .find_map(|name| self.resolve(name).ok())
             .ok_or_eyre("no model found from candidates")
-    }
-}
-
-impl ModelRepo for &Path {
-    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
-        self.join(file_name)
-            .canonicalize()
-            .wrap_err(format!("failed to resolve model: {file_name}"))
-    }
-}
-
-impl ModelRepo for &CacheRepo {
-    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
-        self.get(file_name)
-            .ok_or_eyre(format!("model not found in cache: {file_name}"))
-    }
-}
-
-impl ModelRepo for &ApiRepo {
-    fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
-        self.get(file_name)
-            .wrap_err(format!("failed to download from api: {file_name}"))
     }
 }
 
@@ -62,15 +64,15 @@ impl ParakeetTdt {
     ///
     /// * `repo` - Model repository (local path, HF cache, or HF API)
     /// * `session_builder` - ONNX session builder for configuring execution providers
-    pub fn from_repo<R: ModelRepo>(repo: R, session_builder: SessionBuilder) -> EyreResult<Self> {
+    pub fn from_repo(repo: &ModelRepo, session_builder: SessionBuilder) -> EyreResult<Self> {
         // Resolve model paths with priority fallback
-        let encoder_path = repo.resolve_any([
+        let encoder_path = repo.resolve_any(&[
             "encoder-model.onnx",
             "encoder.onnx",
             "encoder-model.int8.onnx",
         ])?;
 
-        let decoder_path = repo.resolve_any([
+        let decoder_path = repo.resolve_any(&[
             "decoder_joint-model.onnx",
             "decoder_joint.onnx",
             "decoder_joint-model.int8.onnx",

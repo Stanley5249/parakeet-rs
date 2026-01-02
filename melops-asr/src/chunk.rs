@@ -3,20 +3,18 @@
 use crate::audio::SAMPLE_RATE;
 
 /// Default chunk duration in seconds (4 minutes)
-const DEFAULT_CHUNK_DURATION: f32 = 240.0;
+pub const DEFAULT_CHUNK_DURATION: f32 = 240.0;
 
 /// Default chunk overlap in seconds
-const DEFAULT_CHUNK_OVERLAP: f32 = 1.0;
+pub const DEFAULT_CHUNK_OVERLAP: f32 = 1.0;
 
 /// Configuration for audio chunking.
-#[derive(clap::Args, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ChunkConfig {
     /// Chunk duration in seconds for long audio
-    #[arg(long, default_value_t = DEFAULT_CHUNK_DURATION)]
     pub duration: f32,
 
     /// Chunk overlap in seconds
-    #[arg(long, default_value_t = DEFAULT_CHUNK_OVERLAP)]
     pub overlap: f32,
 }
 

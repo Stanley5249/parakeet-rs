@@ -1,5 +1,9 @@
 //! Dl subcommand - download and generate captions from audio URL.
 
+use crate::cap::CapConfig;
+use crate::cli::{CaptionArgs, ModelArgs};
+use crate::config::ModelConfig;
+use clap::Args;
 use color_eyre::Section;
 use eyre::{Context, OptionExt, Result, eyre};
 use melops_asr::chunk::ChunkConfig;
@@ -7,11 +11,9 @@ use melops_dl::asr::AudioFormat;
 use melops_dl::dl::{DownloadOptions, download};
 use std::path::PathBuf;
 
-use crate::cli::CaptionConfig;
-
 /// CLI arguments for download and caption generation.
-#[derive(clap::Args, Debug)]
-pub struct Args {
+#[derive(Args, Debug)]
+pub struct DlCommand {
     /// URL to download
     pub url: String,
 
@@ -20,32 +22,37 @@ pub struct Args {
     pub output: Option<PathBuf>,
 
     #[command(flatten)]
-    pub caption_config: CaptionConfig,
+    pub model_args: ModelArgs,
+
+    #[command(flatten)]
+    pub caption_args: CaptionArgs,
 }
 
 /// Resolved configuration for download and caption generation.
 #[derive(Debug)]
-pub struct Config {
+pub struct DlConfig {
     pub url: String,
     pub output_dir: Option<PathBuf>,
+    pub model_config: ModelConfig,
     pub preview: bool,
     pub chunk_config: ChunkConfig,
 }
 
-impl TryFrom<Args> for Config {
+impl TryFrom<DlCommand> for DlConfig {
     type Error = eyre::Error;
 
-    fn try_from(args: Args) -> Result<Self> {
+    fn try_from(args: DlCommand) -> Result<Self> {
         Ok(Self {
             url: args.url,
             output_dir: args.output,
-            preview: args.caption_config.preview,
-            chunk_config: args.caption_config.chunk_config,
+            model_config: args.model_args.try_into()?,
+            preview: args.caption_args.preview,
+            chunk_config: args.caption_args.chunk_args.into(),
         })
     }
 }
 
-pub fn execute(config: Config) -> Result<()> {
+pub fn execute(config: DlConfig) -> Result<()> {
     tracing::info!(url = config.url, "downloading audio");
 
     let mut opts: DownloadOptions = AudioFormat::Pcm16.into();
@@ -80,9 +87,10 @@ pub fn execute(config: Config) -> Result<()> {
     let srt_path = audio_path.with_extension("srt");
 
     // Generate captions using cap module's logic
-    let cap_config = crate::cap::Config {
+    let cap_config = CapConfig {
         path: audio_path.clone(),
-        output: Some(srt_path),
+        output: srt_path,
+        model_config: config.model_config,
         preview: config.preview,
         chunk_config: config.chunk_config,
     };

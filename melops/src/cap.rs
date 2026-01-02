@@ -1,9 +1,10 @@
 //! Cap subcommand - generate captions from audio file to SRT.
 
-use crate::cli::CaptionConfig;
+use crate::cli::{CaptionArgs, ModelArgs};
+use crate::config::ModelConfig;
 use crate::srt::{self, display_subtitle};
+use clap::Args;
 use eyre::{Context, Result};
-use hf_hub::api::sync::Api;
 use melops_asr::audio::read_audio_mono;
 use melops_asr::chunk::ChunkConfig;
 use melops_asr::pipelines::ParakeetTdt;
@@ -15,11 +16,9 @@ use srtlib::Subtitle;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-const MODEL_ID: &str = "istupakov/parakeet-tdt-0.6b-v3-onnx";
-
 /// CLI arguments for caption generation.
-#[derive(clap::Args, Debug)]
-pub struct Args {
+#[derive(Args, Debug)]
+pub struct CapCommand {
     /// Path to input WAV file
     pub path: PathBuf,
 
@@ -28,36 +27,43 @@ pub struct Args {
     pub output: Option<PathBuf>,
 
     #[command(flatten)]
-    pub caption_config: CaptionConfig,
+    pub model_args: ModelArgs,
+
+    #[command(flatten)]
+    pub caption_args: CaptionArgs,
 }
 
 /// Resolved configuration for caption generation.
 #[derive(Debug)]
-pub struct Config {
+pub struct CapConfig {
     pub path: PathBuf,
-    pub output: Option<PathBuf>,
+    pub output: PathBuf,
+    pub model_config: ModelConfig,
     pub preview: bool,
     pub chunk_config: ChunkConfig,
 }
 
-impl TryFrom<Args> for Config {
+impl TryFrom<CapCommand> for CapConfig {
     type Error = eyre::Error;
 
-    fn try_from(args: Args) -> Result<Self> {
+    fn try_from(args: CapCommand) -> Result<Self> {
+        let output = args
+            .output
+            .unwrap_or_else(|| args.path.with_extension("srt"));
+
         Ok(Self {
             path: args.path,
-            output: args.output,
-            preview: args.caption_config.preview,
-            chunk_config: args.caption_config.chunk_config,
+            output,
+            model_config: args.model_args.try_into()?,
+            preview: args.caption_args.preview,
+            chunk_config: args.caption_args.chunk_args.into(),
         })
     }
 }
 
-pub fn execute(config: Config) -> Result<()> {
+pub fn execute(config: CapConfig) -> Result<()> {
     // Resolve output path
-    let output = config
-        .output
-        .unwrap_or_else(|| config.path.with_extension("srt"));
+    let output = config.output;
 
     tracing::info!(
         input = ?config.path.display(),
@@ -65,7 +71,7 @@ pub fn execute(config: Config) -> Result<()> {
         "generating captions"
     );
 
-    let subtitles = caption_from_wav_file(&config.path, config.chunk_config)?;
+    let subtitles = caption_from_wav_file(&config.path, config.model_config, config.chunk_config)?;
 
     tracing::info!(path = ?output.display(), "write srt file");
 
@@ -82,20 +88,20 @@ pub fn execute(config: Config) -> Result<()> {
 }
 
 /// Perform ASR on WAV file and return captions as subtitles.
-fn caption_from_wav_file(wav_path: &Path, chunk_config: ChunkConfig) -> Result<Vec<Subtitle>> {
+fn caption_from_wav_file(
+    wav_path: &Path,
+    model_config: ModelConfig,
+    chunk_config: ChunkConfig,
+) -> Result<Vec<Subtitle>> {
     let audio = read_audio_mono(wav_path)
         .wrap_err_with(|| format!("failed to load audio: {:?}", wav_path.display()))?;
-
-    tracing::info!("locating model");
-    let api = Api::new()?;
-    let repo = api.model(MODEL_ID.to_string());
 
     let s = Instant::now();
 
     tracing::info!("loading model");
 
     let builder = build_session()?;
-    let mut model = ParakeetTdt::from_repo(&repo, builder)?;
+    let mut model = ParakeetTdt::from_repo(&model_config.repo, builder)?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "model loaded");
