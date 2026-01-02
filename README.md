@@ -11,6 +11,7 @@ This project is organized as a Cargo workspace:
 - `parakeet-rs/` - Core ASR library crate (no execution provider features)
 - `melops/` - CLI binary `mel` with configurable execution provider features
 - `melops-dl/` - Minimal yt-dlp wrapper for downloading and organizing audio by metadata
+- `melops-export/` - Python package for exporting Parakeet models to ONNX
 
 ## Quick Start
 
@@ -29,7 +30,12 @@ pixi run mel dl "https://youtu.be/jNQXAC9IVRw"
 pixi run -e openvino mel cap audio.wav
 # Or run with feature flag (-F <features...>)
 pixi run -e openvino cargo run -p melops -F openvino cap audio.wav
+
+# Export Parakeet model to ONNX
+pixi run export
 ```
+
+See `melops-export/README.md` for export details.
 
 ## ONNX Runtime
 

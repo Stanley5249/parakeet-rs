@@ -1,0 +1,28 @@
+[build-system]
+requires = ["uv-build>=0.9.21,<0.10"]
+build-backend = "uv_build"
+
+[project]
+name = "melops-export"
+version = "0.1.0"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "nemo-toolkit[asr]>=2.6.0,<2.7",
+    "torch>=2.8.0,<2.9",
+    "onnxscript>=0.5.7,<0.6",
+    "tokenizers>=0.21.4,<0.22",
+]
+
+[tool.uv]
+environments = [
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'"
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

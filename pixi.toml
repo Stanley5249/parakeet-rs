@@ -4,6 +4,7 @@ channels = ["https://prefix.dev/conda-forge"]
 name = "melops"
 platforms = ["win-64", "linux-64"]
 version = "0.1.0"
+preview = ["pixi-build"]
 
 [activation.env]
 RUST_LOG = "info,melops=debug,ort=warn"
@@ -17,11 +18,16 @@ test-ignored = "cargo test --workspace -- --ignored --no-capture"
 [dependencies]
 rust = ">=1.92.0,<1.93"
 rust-src = ">=1.92.0,<1.93"
-python = ">=3.13,<3.14"
+python = ">=3.13.10,<3.14"
 yt-dlp = ">=2025.12.8,<2026"
 ffmpeg = ">=5.1.0,<9.0"
 # CPU build only on conda; other EP builds might be on PyPI
 # onnxruntime-cpp = ">=1.22.2,<2"
+
+[environments]
+openvino = ["openvino"]
+export = { features = ["export"], no-default-feature = true }
+
 
 [feature.openvino.tasks]
 mel = "cargo run -p melops -F openvino"
@@ -40,5 +46,16 @@ libopenvino-intel-gpu-plugin = ">=2025.4.0,<2025.5.0"
 [feature.openvino.pypi-dependencies]
 onnxruntime-openvino = ">=1.22.0,<1.23.0"
 
-[environments]
-openvino = ["openvino"]
+
+[feature.export.tasks]
+export = "python -m melops_export"
+
+[feature.export.dependencies]
+melops-export = { path = "melops-export" }
+
+# Pixi-build does not support conda package depends on pypi package directly.
+[feature.export.pypi-dependencies]
+nemo-toolkit = { version = ">=2.6.0,<2.7", extras = ["asr"] }
+torch = { version = ">=2.8.0,<2.9", index = "https://download.pytorch.org/whl/cpu"}
+onnxscript = ">=0.5.7,<0.6"
+tokenizers = ">=0.21.4,<0.22"

@@ -22,3 +22,6 @@ __pycache__/
 # Test data
 *.wav
 *.srt
+
+# Project cache
+.cache/
