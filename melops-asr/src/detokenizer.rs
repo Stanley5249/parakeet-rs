@@ -3,7 +3,7 @@
 use crate::error::{Error, Result};
 use crate::traits::Detokenizer;
 use crate::types::{Token, Transcription};
-use parakeet_rs::Vocabulary;
+use tokenizers::Tokenizer;
 
 /// Output from TDT model forward pass.
 #[derive(Debug, Clone)]
@@ -18,29 +18,29 @@ pub struct TdtOutput {
 
 /// SentencePiece-based detokenizer for TDT models.
 pub struct SentencePieceDetokenizer {
-    pub vocabulary: Vocabulary,
+    pub tokenizer: Tokenizer,
     /// Duration of one encoder frame in seconds.
     /// For TDT: 8 mel frames/encoder frame * (160 samples/mel frame / 16000 Hz) = 0.08s (80ms)
-    encoder_frame_duration: f32,
+    pub encoder_frame_duration: f32,
 }
 
 impl SentencePieceDetokenizer {
-    /// Create detokenizer from vocabulary and encoder frame duration.
+    /// Create detokenizer from tokenizer and encoder frame duration.
     ///
     /// # Arguments
-    /// - `vocabulary`: SentencePiece vocabulary
+    /// - `tokenizer`: HuggingFace tokenizer
     /// - `encoder_frame_duration`: Duration of one encoder frame in seconds
-    pub fn new(vocabulary: Vocabulary, encoder_frame_duration: f32) -> Self {
+    pub fn new(tokenizer: Tokenizer, encoder_frame_duration: f32) -> Self {
         Self {
-            vocabulary,
+            tokenizer,
             encoder_frame_duration,
         }
     }
 
-    /// Create detokenizer for TDT models from vocabulary and audio config.
+    /// Create detokenizer for TDT models from tokenizer and audio config.
     ///
     /// # Arguments
-    /// - `vocabulary`: SentencePiece vocabulary
+    /// - `tokenizer`: HuggingFace tokenizer
     /// - `hop_length`: Audio samples per mel frame (typically 160)
     /// - `sample_rate`: Audio sample rate in Hz (typically 16000)
     ///
@@ -49,15 +49,15 @@ impl SentencePieceDetokenizer {
     /// Encoder frame duration = `(8 * hop_length) / sample_rate`
     ///
     /// Standard config: `(8 * 160) / 16000 = 0.08` seconds (80ms)
-    pub fn for_tdt(vocabulary: Vocabulary, hop_length: usize, sample_rate: usize) -> Self {
+    pub fn for_tdt(tokenizer: Tokenizer, hop_length: usize, sample_rate: usize) -> Self {
         const ENCODER_STRIDE: usize = 8; // TDT encoder applies 8x subsampling
         let encoder_frame_duration = (ENCODER_STRIDE * hop_length) as f32 / sample_rate as f32;
-        Self::new(vocabulary, encoder_frame_duration)
+        Self::new(tokenizer, encoder_frame_duration)
     }
 
     /// Get vocabulary size.
     pub fn vocab_size(&self) -> usize {
-        self.vocabulary.size()
+        self.tokenizer.get_vocab_size(true)
     }
 
     /// Convert encoder frame index to timestamp in seconds.
@@ -103,8 +103,8 @@ impl Detokenizer for SentencePieceDetokenizer {
 
         for (i, &token_id) in input.tokens.iter().enumerate() {
             let token_text = self
-                .vocabulary
-                .id_to_text(token_id)
+                .tokenizer
+                .id_to_token(token_id as u32)
                 .ok_or(Error::InvalidTokenId(token_id))?;
 
             // Calculate token timestamp from encoder frame index

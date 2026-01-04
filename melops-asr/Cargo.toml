@@ -16,6 +16,7 @@ hound.workspace = true
 ndarray.workspace = true
 ort = { workspace = true, features = ["std", "ndarray", "tracing"] }
 thiserror.workspace = true
+tokenizers.workspace = true
 
 tracing = "0.1.44"
 

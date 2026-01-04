@@ -4,12 +4,12 @@ use crate::detokenizer::SentencePieceDetokenizer;
 use crate::models::tdt::TdtModel;
 use crate::preprocessor::ParakeetPreprocessor;
 use crate::traits::AsrPipeline;
-use eyre::{ContextCompat, OptionExt, Result as EyreResult, WrapErr};
+use eyre::{ContextCompat, OptionExt, Result, WrapErr, eyre};
 use hf_hub::CacheRepo;
 use hf_hub::api::sync::ApiRepo;
 use ort::session::builder::SessionBuilder;
-use parakeet_rs::Vocabulary;
 use std::path::PathBuf;
+use tokenizers::Tokenizer;
 
 /// Model repository sources.
 ///
@@ -27,7 +27,7 @@ pub enum ModelRepo {
 
 impl ModelRepo {
     /// Resolve a file name to its full path in this repository.
-    pub fn resolve(&self, file_name: &str) -> EyreResult<PathBuf> {
+    pub fn resolve(&self, file_name: &str) -> Result<PathBuf> {
         match self {
             ModelRepo::Path(path) => path
                 .join(file_name)
@@ -43,7 +43,7 @@ impl ModelRepo {
     }
 
     /// Try resolving multiple file names, return first successful match.
-    pub fn resolve_any(&self, candidates: &[&str]) -> EyreResult<PathBuf> {
+    pub fn resolve_any(&self, candidates: &[&str]) -> Result<PathBuf> {
         candidates
             .iter()
             .find_map(|name| self.resolve(name).ok())
@@ -64,7 +64,7 @@ impl ParakeetTdt {
     ///
     /// * `repo` - Model repository (local path, HF cache, or HF API)
     /// * `session_builder` - ONNX session builder for configuring execution providers
-    pub fn from_repo(repo: &ModelRepo, session_builder: SessionBuilder) -> EyreResult<Self> {
+    pub fn from_repo(repo: &ModelRepo, session_builder: SessionBuilder) -> Result<Self> {
         // Resolve model paths with priority fallback
         let encoder_path = repo.resolve_any(&[
             "encoder-model.onnx",
@@ -78,7 +78,7 @@ impl ParakeetTdt {
             "decoder_joint-model.int8.onnx",
         ])?;
 
-        let vocab_path = repo.resolve("vocab.txt")?;
+        let tokenizer_path = repo.resolve("tokenizer.json")?;
 
         // Create ONNX sessions
         let encoder_session = session_builder
@@ -92,11 +92,18 @@ impl ParakeetTdt {
 
         // Load preprocessor and detokenizer
         let preprocessor = ParakeetPreprocessor::tdt();
-        let vocabulary =
-            Vocabulary::from_file(&vocab_path).wrap_err("failed to load vocabulary")?;
+
+        // Boxed dyn error does not implement the Error trait
+        // https://deepwiki.com/search/how-to-convert-box-dyn-error-i_e1d11897-6026-4438-9785-1997b61beccf
+        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| eyre!(e))
+            .wrap_err(format!(
+                "failed to load tokenizer from {:?}",
+                tokenizer_path
+            ))?;
 
         let detokenizer = SentencePieceDetokenizer::for_tdt(
-            vocabulary,
+            tokenizer,
             preprocessor.config().hop_length,
             preprocessor.config().sampling_rate,
         );
