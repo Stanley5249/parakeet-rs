@@ -64,11 +64,14 @@ def export_onnx_rnnt(
     Creates encoder-model.onnx + .data and decoder_joint-model.onnx + .data.
     Uses batch_size=1 with dynamic sequence lengths.
     """
+    # Dynamic axes for variable-length audio sequences
+    # Encoder input: audio_signal (1, 128, time) - time at axis 2
+    # Encoder output: outputs (1, 8192, time) - time at axis 2
+    # Decoder input: encoder_outputs (1, 8192, time) - time at axis 2
     dynamic_axes = {
-        "audio_signal": {1: "time"},
-        "length": {},
-        "outputs": {1: "time"},
-        "encoded_lengths": {},
+        "audio_signal": {2: "time"},
+        "outputs": {2: "time"},
+        "encoder_outputs": {2: "time"},
     }
 
     model.export(str(temp_dir / "model.onnx"), dynamic_axes=dynamic_axes)
