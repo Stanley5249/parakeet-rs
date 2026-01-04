@@ -5,11 +5,11 @@ build-backend = "uv_build"
 [project]
 name = "melops-export"
 version = "0.1.0"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.13.10,<3.14"
 dependencies = [
     "nemo-toolkit[asr]>=2.6.0,<2.7",
     "torch>=2.8.0,<2.9",
-    "onnxscript>=0.5.7,<0.6",
+    "onnxscript>=0.5.0,<0.6",
     "tokenizers>=0.21.4,<0.22",
 ]
 
