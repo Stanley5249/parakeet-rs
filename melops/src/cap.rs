@@ -2,7 +2,7 @@
 
 use crate::cli::{CaptionArgs, ModelArgs};
 use crate::config::ModelConfig;
-use crate::srt::{self, display_subtitle};
+use crate::srt::{self, display_subtitles};
 use clap::Args;
 use eyre::{Context, Result};
 use melops_asr::audio::read_audio_mono;
@@ -76,7 +76,7 @@ pub fn execute(config: CapConfig) -> Result<()> {
     tracing::info!(path = ?output.display(), "write srt file");
 
     // Write to file
-    std::fs::write(&output, display_subtitle(&subtitles))
+    std::fs::write(&output, display_subtitles(&subtitles))
         .wrap_err_with(|| format!("failed to write srt: {:?}", output.display()))?;
 
     // Display preview or full output to stdout

@@ -134,7 +134,7 @@ fn seconds_to_timestamp(seconds: f32) -> Timestamp {
 /// Format subtitles as SRT file content.
 ///
 /// Joins subtitle entries with double newlines as required by SRT format.
-pub fn display_subtitle(subtitles: &[Subtitle]) -> String {
+pub fn display_subtitles(subtitles: &[Subtitle]) -> String {
     subtitles
         .iter()
         .map(|s| s.to_string())
@@ -158,7 +158,7 @@ pub fn preview_subtitles(subtitles: &[Subtitle], head_count: usize, tail_count: 
 
     // If total fits in head + tail, print all
     if total <= head_count + tail_count {
-        display_subtitle(subtitles)
+        display_subtitles(subtitles)
     } else {
         let mut out = Vec::new();
 
