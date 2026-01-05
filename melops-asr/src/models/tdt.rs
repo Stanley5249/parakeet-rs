@@ -1,10 +1,13 @@
 //! TDT (Token-and-Duration Transducer) model implementation.
 
-use crate::detokenizer::TokenDuration;
+use crate::audio::MelSpectrogram;
+use crate::detokenizer::{TdtDetokenizer, TokenDuration};
 use crate::error::{ModelError, Result};
 use crate::traits::AsrModel;
 use ndarray::{Array1, Array2, Array3, ArrayViewD, Axis, Ix1, Ix3};
 use ndarray_stats::QuantileExt;
+#[allow(unused_imports)]
+use ort::execution_providers::*;
 use ort::{inputs, session::Session, value::Tensor, value::Value};
 
 /// TDT model for ASR inference.
@@ -13,25 +16,32 @@ use ort::{inputs, session::Session, value::Tensor, value::Value};
 /// joint decoder components. The decoder predicts both tokens and their durations,
 /// enabling efficient streaming inference by skipping multiple frames at once.
 pub struct TdtModel {
+    pub mel: MelSpectrogram,
     pub encoder: Session,
     pub decoder_joint: Session,
-    pub vocab_size: usize,
+    pub detokenizer: TdtDetokenizer,
     pub durations: Vec<usize>,
 }
 
 impl TdtModel {
-    /// Creates a new TDT model instance.
+    /// TDT encoder subsampling factor (8x).
     ///
-    /// # Arguments
-    ///
-    /// * `encoder` - Encoder ONNX session
-    /// * `decoder_joint` - Decoder/joint ONNX session
-    /// * `vocab_size` - Vocabulary size from detokenizer
-    pub fn new(encoder: Session, decoder_joint: Session, vocab_size: usize) -> Self {
+    /// The encoder downsamples the mel-spectrogram by a factor of 8,
+    /// producing one encoder frame for every 8 mel frames.
+    pub const ENCODER_STRIDE: usize = 8;
+
+    /// Create a new TDT model instance.
+    pub fn new(
+        mel: MelSpectrogram,
+        encoder: Session,
+        decoder_joint: Session,
+        detokenizer: TdtDetokenizer,
+    ) -> Self {
         Self {
+            mel,
             encoder,
             decoder_joint,
-            vocab_size,
+            detokenizer,
             durations: vec![0, 1, 2, 3, 4],
         }
     }
@@ -81,7 +91,7 @@ impl TdtModel {
         encoder_output: Array3<f32>,
         encoded_length: usize,
     ) -> Result<Vec<TokenDuration>> {
-        let blank_id = self.vocab_size;
+        let blank_id = self.detokenizer.vocab_size();
         let max_symbols_per_step = 10;
 
         let state_h = Array3::<f32>::zeros((2, 1, 640));
@@ -176,11 +186,26 @@ impl TdtModel {
 }
 
 impl AsrModel for TdtModel {
-    type Features = Array2<f32>;
     type Output = Vec<TokenDuration>;
 
-    fn forward(&mut self, features: Self::Features) -> Result<Self::Output> {
+    fn forward(&mut self, audio: &[f32]) -> Result<Self::Output> {
+        let features = self.mel.apply(audio);
         let (encoder_output, encoded_length) = self.encode(features)?;
         self.greedy_decode(encoder_output, encoded_length as usize)
+    }
+
+    fn offset_output(output: &mut Self::Output, frame_offset: usize) {
+        for td in output.iter_mut() {
+            td.frame_index += frame_offset;
+        }
+    }
+
+    fn frame_to_secs(&self, frame: usize) -> f32 {
+        (frame * Self::ENCODER_STRIDE * self.mel.hop_length) as f32 / self.mel.sample_rate as f32
+    }
+
+    fn secs_to_frame(&self, secs: f32) -> usize {
+        let samples = (secs * self.mel.sample_rate as f32) as usize;
+        samples / (Self::ENCODER_STRIDE * self.mel.hop_length)
     }
 }

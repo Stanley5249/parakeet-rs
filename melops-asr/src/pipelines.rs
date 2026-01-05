@@ -1,9 +1,8 @@
 //! High-level ASR pipelines.
 
 use crate::audio::MelSpectrogram;
-use crate::detokenizer::SentencePieceDetokenizer;
+use crate::detokenizer::TdtDetokenizer;
 use crate::models::tdt::TdtModel;
-use crate::traits::AsrPipeline;
 use eyre::{ContextCompat, OptionExt, Result, WrapErr, eyre};
 use hf_hub::CacheRepo;
 use hf_hub::api::sync::ApiRepo;
@@ -51,13 +50,7 @@ impl ModelRepo {
     }
 }
 
-/// Parakeet TDT ASR pipeline.
-///
-/// Wraps the TDT (Token-and-Duration Transducer) model for ASR with timestamps.
-/// Uses the generic `AsrPipeline` for chunking and streaming.
-pub type ParakeetTdt = AsrPipeline<TdtModel, SentencePieceDetokenizer>;
-
-impl ParakeetTdt {
+impl TdtModel {
     /// Load TDT pipeline from a model repository.
     ///
     /// # Arguments
@@ -99,15 +92,16 @@ impl ParakeetTdt {
                 tokenizer_path
             ))?;
 
-        let detokenizer = SentencePieceDetokenizer::for_tdt(
-            tokenizer,
-            MelSpectrogram::TDT.hop_length,
-            MelSpectrogram::TDT.sample_rate,
+        let detokenizer = TdtDetokenizer::new(tokenizer);
+
+        // Create model from sessions (model owns detokenizer)
+        let model = TdtModel::new(
+            MelSpectrogram::TDT,
+            encoder_session,
+            decoder_session,
+            detokenizer,
         );
 
-        // Create model from sessions
-        let model = TdtModel::new(encoder_session, decoder_session, detokenizer.vocab_size());
-
-        Ok(AsrPipeline::new(MelSpectrogram::TDT, model, detokenizer))
+        Ok(model)
     }
 }
