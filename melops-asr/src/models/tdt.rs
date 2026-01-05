@@ -1,25 +1,26 @@
 //! TDT (Token-and-Duration Transducer) model implementation.
 
-use crate::detokenizer::TdtOutput;
+use crate::detokenizer::TokenDuration;
 use crate::error::{Error, Result};
 use crate::traits::AsrModel;
-use ndarray::{Array1, Array2, Array3, s};
-use ort::inputs;
-use ort::session::Session;
-use ort::value::Value;
+use ndarray::{Array1, Array2, Array3, ArrayViewD, Axis, Ix1, Ix3};
+use ndarray_stats::QuantileExt;
+use ort::{inputs, session::Session, value::Tensor, value::Value};
 
 /// TDT model for ASR inference.
 ///
-/// Implements the Token-and-Duration Transducer architecture
-/// with encoder and joint decoder components.
+/// Implements the Token-and-Duration Transducer architecture with encoder and
+/// joint decoder components. The decoder predicts both tokens and their durations,
+/// enabling efficient streaming inference by skipping multiple frames at once.
 pub struct TdtModel {
-    encoder: Session,
-    decoder_joint: Session,
-    vocab_size: usize,
+    pub encoder: Session,
+    pub decoder_joint: Session,
+    pub vocab_size: usize,
+    pub durations: Vec<usize>,
 }
 
 impl TdtModel {
-    /// Create TDT model from ONNX sessions.
+    /// Creates a new TDT model instance.
     ///
     /// # Arguments
     ///
@@ -31,181 +32,152 @@ impl TdtModel {
             encoder,
             decoder_joint,
             vocab_size,
+            durations: vec![0, 1, 2, 3, 4],
         }
     }
 
-    fn run_encoder(&mut self, features: &Array2<f32>) -> Result<(Array3<f32>, i64)> {
-        let batch_size = 1;
-        let time_steps = features.shape()[0];
-        let feature_size = features.shape()[1];
+    fn encode(&mut self, audio_signal: Array2<f32>) -> Result<(Array3<f32>, i64)> {
+        let audio_length =
+            Value::from_array(Array1::from_elem((1,), audio_signal.shape()[0] as i64))?;
 
-        // TDT encoder expects (batch, features, time) not (batch, time, features)
-        let input = features
-            .t()
-            .to_shape((batch_size, feature_size, time_steps))
-            .map_err(|e| Error::Model(format!("Failed to reshape encoder input: {e}")))?
-            .to_owned();
-
-        let input_length = Array1::from(vec![time_steps as i64]);
+        let audio_signal = Value::from_array(audio_signal.reversed_axes().insert_axis(Axis(0)))?;
 
         let input_value = inputs!(
-            "audio_signal" => Value::from_array(input)?,
-            "length" => Value::from_array(input_length)?
+            "audio_signal" => audio_signal,
+            "length" => audio_length,
         );
 
-        let outputs = self.encoder.run(input_value)?;
+        let mut outputs = self.encoder.run(input_value)?;
 
-        let encoder_out = &outputs["outputs"];
-        let encoder_lens = &outputs["encoded_lengths"];
+        let encoder_outputs = outputs
+            .remove("outputs")
+            .ok_or_else(|| Error::Model("missing outputs".into()))?;
 
-        let (shape, data) = encoder_out
-            .try_extract_tensor::<f32>()
-            .map_err(|e| Error::Model(format!("Failed to extract encoder output: {e}")))?;
+        let encoded_lengths = outputs
+            .remove("encoded_lengths")
+            .ok_or_else(|| Error::Model("missing encoded_lengths".into()))?;
 
-        let (_, lens_data) = encoder_lens
-            .try_extract_tensor::<i64>()
-            .map_err(|e| Error::Model(format!("Failed to extract encoder lengths: {e}")))?;
+        let encoder_outputs = encoder_outputs
+            .try_extract_array()
+            .map_err(|e| Error::Model(format!("failed to extract encoder output: {e}")))?
+            .to_owned()
+            .into_dimensionality::<Ix3>()
+            .map_err(|e| Error::Model(format!("expected 3D encoder output: {e}")))?;
 
-        let shape_dims = shape.as_ref();
-        if shape_dims.len() != 3 {
-            return Err(Error::Model(format!(
-                "Expected 3D encoder output, got shape: {shape_dims:?}"
-            )));
-        }
+        let encoded_lengths = encoded_lengths
+            .try_extract_array()
+            .map_err(|e| Error::Model(format!("failed to extract encoder lengths: {e}")))?
+            .to_owned()
+            .into_dimensionality::<Ix1>()
+            .map_err(|e| Error::Model(format!("expected 1D encoder lengths: {e}")))?;
 
-        let b = shape_dims[0] as usize;
-        let t = shape_dims[1] as usize;
-        let d = shape_dims[2] as usize;
-
-        let encoder_array = Array3::from_shape_vec((b, t, d), data.to_vec())
-            .map_err(|e| Error::Model(format!("Failed to create encoder array: {e}")))?;
-
-        Ok((encoder_array, lens_data[0]))
+        Ok((encoder_outputs, encoded_lengths[0]))
     }
 
     fn greedy_decode(
         &mut self,
-        encoder_out: &Array3<f32>,
-        _encoder_len: i64,
-    ) -> Result<(Vec<usize>, Vec<usize>, Vec<usize>)> {
-        let encoder_dim = encoder_out.shape()[1];
-        let time_steps = encoder_out.shape()[2];
-        let vocab_size = self.vocab_size;
-        let max_tokens_per_step = 10;
-        let blank_id = vocab_size - 1;
+        encoder_output: Array3<f32>,
+        encoded_length: usize,
+    ) -> Result<Vec<TokenDuration>> {
+        let blank_id = self.vocab_size;
+        let max_symbols_per_step = 10;
 
-        // States: (num_layers=2, batch=1, hidden_dim=640)
-        let mut state_h = Array3::<f32>::zeros((2, 1, 640));
-        let mut state_c = Array3::<f32>::zeros((2, 1, 640));
+        let state_h = Array3::<f32>::zeros((2, 1, 640));
+        let state_c = Array3::<f32>::zeros((2, 1, 640));
+
+        let mut states_1 = Tensor::from_array(state_h)?.into_dyn();
+        let mut states_2 = Tensor::from_array(state_c)?.into_dyn();
 
         let mut tokens = Vec::new();
-        let mut frame_indices = Vec::new();
-        let mut durations = Vec::new();
+        let mut frame_index = 0;
 
-        let mut t = 0;
-        let mut emitted_tokens = 0;
-        let mut last_emitted_token = blank_id as i32;
+        let target = Array2::from_elem((1, 1), blank_id as i32);
+        let mut target = Tensor::from_array(target)?;
 
-        while t < time_steps {
-            let frame = encoder_out.slice(s![0, .., t]).to_owned();
-            let frame_reshaped = frame
-                .to_shape((1, encoder_dim, 1))
-                .map_err(|e| Error::Model(format!("Failed to reshape frame: {e}")))?
-                .to_owned();
+        let target_length = Array1::from_elem((1,), 1);
+        let target_length = Tensor::from_array(target_length)?;
 
-            let targets = Array2::from_shape_vec((1, 1), vec![last_emitted_token])
-                .map_err(|e| Error::Model(format!("Failed to create targets: {e}")))?;
+        while frame_index < encoded_length {
+            let frame = encoder_output
+                .slice_axis(Axis(2), (frame_index..frame_index + 1).into())
+                .into_owned();
+            let frame = Tensor::from_array(frame)?;
 
-            let outputs = self.decoder_joint.run(inputs!(
-                "encoder_outputs" => ort::value::Value::from_array(frame_reshaped)?,
-                "targets" => ort::value::Value::from_array(targets)?,
-                "target_length" => ort::value::Value::from_array(Array1::from_vec(vec![1i32]))?,
-                "input_states_1" => ort::value::Value::from_array(state_h.clone())?,
-                "input_states_2" => ort::value::Value::from_array(state_c.clone())?
-            ))?;
+            // Label looping: emit multiple tokens per frame if decoder keeps predicting non-blank
+            'inner: {
+                for _ in 0..max_symbols_per_step {
+                    let mut outputs = self.decoder_joint.run(inputs!(
+                        "encoder_outputs" => &frame,
+                        "targets" => &target,
+                        "target_length" => &target_length,
+                        "input_states_1" => &states_1,
+                        "input_states_2" => &states_2
+                    ))?;
 
-            let (_, logits_data) = outputs["outputs"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| Error::Model(format!("Failed to extract logits: {e}")))?;
+                    let logits_view: ArrayViewD<f32> = outputs["outputs"]
+                        .try_extract_array()
+                        .map_err(|e| Error::Model(format!("failed to extract logits: {e}")))?;
 
-            let vocab_logits: Vec<f32> = logits_data.iter().take(vocab_size).copied().collect();
-            let duration_logits: Vec<f32> = logits_data.iter().skip(vocab_size).copied().collect();
+                    let logits_flat = logits_view.flatten();
 
-            let token_id = vocab_logits
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|(idx, _)| idx)
-                .unwrap_or(blank_id);
+                    // Decoder outputs: [vocab_0..vocab_n, blank, duration_0..duration_4]
+                    let text_logits = logits_flat.slice_axis(Axis(0), (0..blank_id + 1).into());
+                    let token_id = text_logits.argmax().map_err(|e| {
+                        Error::Model(format!("failed to compute argmax for text logits: {e}"))
+                    })?;
 
-            let duration_step = if !duration_logits.is_empty() {
-                duration_logits
-                    .iter()
-                    .enumerate()
-                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0)
-            } else {
-                0
-            };
+                    let duration_logits = logits_flat.slice_axis(Axis(0), (blank_id + 1..).into());
+                    let duration_idx = duration_logits.argmax().map_err(|e| {
+                        Error::Model(format!("failed to compute argmax for duration logits: {e}"))
+                    })?;
 
-            if token_id != blank_id {
-                if let Ok((h_shape, h_data)) =
-                    outputs["output_states_1"].try_extract_tensor::<f32>()
-                {
-                    let dims = h_shape.as_ref();
-                    state_h = Array3::from_shape_vec(
-                        (dims[0] as usize, dims[1] as usize, dims[2] as usize),
-                        h_data.to_vec(),
-                    )
-                    .map_err(|e| Error::Model(format!("Failed to update state_h: {e}")))?;
+                    let skip = self.durations.get(duration_idx).copied().ok_or_else(|| {
+                        Error::Model(format!("duration index {duration_idx} out of bounds"))
+                    })?;
+
+                    if token_id != blank_id {
+                        // Update LSTM states for next token prediction
+                        states_1 = outputs
+                            .remove("output_states_1")
+                            .ok_or_else(|| Error::Model("missing output_states_1".into()))?;
+                        states_2 = outputs
+                            .remove("output_states_2")
+                            .ok_or_else(|| Error::Model("missing output_states_2".into()))?;
+
+                        tokens.push(TokenDuration {
+                            token_id,
+                            frame_index,
+                            duration: skip,
+                        });
+
+                        target[[0, 0]] = token_id as i32;
+                    }
+
+                    tracing::trace!(frame_index, skip);
+
+                    frame_index = encoded_length.min(frame_index + skip);
+
+                    // Duration > 0: advance to next frame
+                    if skip != 0 {
+                        break 'inner;
+                    }
                 }
-                if let Ok((c_shape, c_data)) =
-                    outputs["output_states_2"].try_extract_tensor::<f32>()
-                {
-                    let dims = c_shape.as_ref();
-                    state_c = Array3::from_shape_vec(
-                        (dims[0] as usize, dims[1] as usize, dims[2] as usize),
-                        c_data.to_vec(),
-                    )
-                    .map_err(|e| Error::Model(format!("Failed to update state_c: {e}")))?;
-                }
 
-                tokens.push(token_id);
-                frame_indices.push(t);
-                durations.push(duration_step);
-                last_emitted_token = token_id as i32;
-                emitted_tokens += 1;
-            } else {
-                if duration_step > 0 && emitted_tokens > 0 {
-                    t += duration_step;
-                } else {
-                    t += 1;
-                }
-                emitted_tokens = 0;
-            }
-
-            if emitted_tokens >= max_tokens_per_step {
-                t += 1;
-                emitted_tokens = 0;
+                // Max symbols reached without duration prediction: force frame advance
+                frame_index += 1;
             }
         }
 
-        Ok((tokens, frame_indices, durations))
+        Ok(tokens)
     }
 }
 
 impl AsrModel for TdtModel {
     type Features = Array2<f32>;
-    type Output = TdtOutput;
+    type Output = Vec<TokenDuration>;
 
     fn forward(&mut self, features: Self::Features) -> Result<Self::Output> {
-        let (encoder_out, encoder_len) = self.run_encoder(&features)?;
-        let (tokens, frame_indices, durations) = self.greedy_decode(&encoder_out, encoder_len)?;
-        Ok(TdtOutput {
-            tokens,
-            frame_indices,
-            durations,
-        })
+        let (encoder_output, encoded_length) = self.encode(features)?;
+        self.greedy_decode(encoder_output, encoded_length as usize)
     }
 }

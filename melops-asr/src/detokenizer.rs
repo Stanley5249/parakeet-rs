@@ -5,15 +5,15 @@ use crate::traits::Detokenizer;
 use crate::types::{Token, Transcription};
 use tokenizers::Tokenizer;
 
-/// Output from TDT model forward pass.
-#[derive(Debug, Clone)]
-pub struct TdtOutput {
-    /// Decoded token IDs
-    pub tokens: Vec<usize>,
-    /// Frame indices for each token
-    pub frame_indices: Vec<usize>,
-    /// Duration of each token in frames
-    pub durations: Vec<usize>,
+/// Token with timing information from TDT decoder.
+#[derive(Clone, Debug)]
+pub struct TokenDuration {
+    /// Token ID (not blank)
+    pub token_id: usize,
+    /// Encoder frame index where token was emitted
+    pub frame_index: usize,
+    /// Duration prediction (number of frames to skip)
+    pub duration: usize,
 }
 
 /// SentencePiece-based detokenizer for TDT models.
@@ -96,34 +96,27 @@ impl SentencePieceDetokenizer {
 }
 
 impl Detokenizer for SentencePieceDetokenizer {
-    type Input = TdtOutput;
+    type Input = Vec<TokenDuration>;
 
     fn decode(&self, input: &Self::Input) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
 
-        for (i, &token_id) in input.tokens.iter().enumerate() {
+        for (i, td) in input.iter().enumerate() {
             let token_text = self
                 .tokenizer
-                .id_to_token(token_id as u32)
-                .ok_or(Error::InvalidTokenId(token_id))?;
+                .id_to_token(td.token_id as u32)
+                .ok_or(Error::InvalidTokenId(td.token_id))?;
 
-            // Calculate token timestamp from encoder frame index
-            let start = self.frame_to_timestamp(input.frame_indices[i]);
-            let end = if let Some(&next_frame) = input.frame_indices.get(i + 1) {
-                self.frame_to_timestamp(next_frame)
+            let start = self.frame_to_timestamp(td.frame_index);
+            let end = if let Some(next) = input.get(i + 1) {
+                self.frame_to_timestamp(next.frame_index)
             } else {
-                // Last token: assume 1 encoder frame duration
                 start + self.encoder_frame_duration
             };
 
-            // Handle SentencePiece format (▁ prefix for word start)
             let text = token_text.replace('▁', " ");
 
-            // Skip special tokens (but keep <unk>)
-            if !(token_text.starts_with('<') && token_text.ends_with('>') && token_text != "<unk>")
-            {
-                tokens.push(Token { text, start, end });
-            }
+            tokens.push(Token { text, start, end });
         }
 
         Ok(tokens)
