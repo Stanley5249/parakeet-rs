@@ -5,11 +5,12 @@
 //!
 //! # Architecture
 //!
-//! The library is built around three core traits:
+//! The library is built around two core traits:
 //!
-//! - [`traits::AudioPreprocessor`]: Converts raw audio to model-specific features
 //! - [`traits::AsrModel`]: Runs inference on features to produce model output
 //! - [`traits::Detokenizer`]: Converts model output to human-readable transcription
+//!
+//! Mel-spectrogram extraction is handled by [`audio::MelSpectrogram`].
 //!
 //! # Quick Start
 //!
@@ -36,6 +37,5 @@ pub mod detokenizer;
 pub mod error;
 pub mod models;
 pub mod pipelines;
-pub mod preprocessor;
 pub mod traits;
 pub mod types;

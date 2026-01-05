@@ -1,6 +1,6 @@
 //! Audio loading and preprocessing utilities.
 
-use crate::error::{AudioError, PreprocessingError, Result};
+use crate::error::{AudioError, Result};
 use hound::{SampleFormat, WavReader, WavSpec};
 use ndarray::Array2;
 use std::f32::consts::PI;
@@ -9,34 +9,41 @@ use std::path::Path;
 /// Expected sample rate for ASR models (16kHz)
 pub const SAMPLE_RATE: u32 = 16000;
 
-/// Preprocessor configuration for TDT models.
+/// Mel-spectrogram feature extractor.
+///
+/// Converts raw audio into mel-spectrogram features for ASR inference.
 #[derive(Clone, Debug)]
-pub struct PreprocessorConfig {
-    pub feature_size: usize,
+pub struct MelSpectrogram {
+    pub n_mels: usize,
     pub hop_length: usize,
     pub n_fft: usize,
     pub preemphasis: f32,
-    pub sampling_rate: usize,
+    pub sample_rate: usize,
     pub win_length: usize,
 }
 
-impl Default for PreprocessorConfig {
-    fn default() -> Self {
-        Self {
-            feature_size: 128,
-            hop_length: 160,
-            n_fft: 512,
-            preemphasis: 0.97,
-            sampling_rate: 16000,
-            win_length: 400,
-        }
-    }
-}
+impl MelSpectrogram {
+    /// TDT model mel-spectrogram extractor (128 mel features).
+    pub const TDT: Self = Self {
+        n_mels: 128,
+        hop_length: 160,
+        n_fft: 512,
+        preemphasis: 0.97,
+        sample_rate: 16000,
+        win_length: 400,
+    };
 
-impl PreprocessorConfig {
-    /// Create TDT-specific preprocessor configuration (128 mel features).
-    pub fn tdt() -> Self {
-        Self::default()
+    /// Apply mel-spectrogram extraction to audio samples.
+    ///
+    /// # Arguments
+    ///
+    /// * `audio` - 16kHz mono audio samples (f32 slice)
+    ///
+    /// # Returns
+    ///
+    /// 2D array of mel-spectrogram features (time_steps, n_mels)
+    pub fn apply(&self, audio: &[f32]) -> Array2<f32> {
+        mel_spectrogram(audio, self)
     }
 }
 
@@ -194,58 +201,31 @@ fn create_mel_filterbank(n_fft: usize, n_mels: usize, sample_rate: usize) -> Arr
     filterbank
 }
 
-/// Extract mel spectrogram features from raw audio samples.
+/// Extract mel-spectrogram features from audio samples.
 ///
 /// Performs complete preprocessing pipeline:
-/// 1. Validates sample rate
-/// 2. Converts stereo to mono if needed
-/// 3. Applies preemphasis filter
-/// 4. Computes STFT power spectrogram
-/// 5. Applies mel filterbank
-/// 6. Log compression
-/// 7. Mean-variance normalization per feature
+/// 1. Applies preemphasis filter
+/// 2. Computes STFT power spectrogram
+/// 3. Applies mel filterbank
+/// 4. Log compression
+/// 5. Mean-variance normalization per feature
+///
+/// Internal function - prefer using `MelSpectrogram::apply()`.
 ///
 /// # Arguments
 ///
-/// * `audio` - Audio samples as f32 values
-/// * `sample_rate` - Sample rate in Hz
-/// * `channels` - Number of audio channels
-/// * `config` - Preprocessor configuration
+/// * `audio` - 16kHz mono audio samples (f32 slice)
+/// * `config` - Mel-spectrogram configuration
 ///
 /// # Returns
 ///
-/// 2D array of mel spectrogram features (time_steps, feature_size)
-///
-/// # Errors
-///
-/// Returns error if sample rate doesn't match expected rate.
-pub fn extract_features(
-    mut audio: Vec<f32>,
-    sample_rate: u32,
-    channels: u16,
-    config: &PreprocessorConfig,
-) -> Result<Array2<f32>> {
-    if sample_rate != config.sampling_rate as u32 {
-        return Err(PreprocessingError::SampleRateMismatch {
-            expected: config.sampling_rate as u32,
-            got: sample_rate,
-        }
-        .into());
-    }
-
-    if channels > 1 {
-        audio = audio
-            .chunks(channels as usize)
-            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
-            .collect();
-    }
-
-    audio = apply_preemphasis(&audio, config.preemphasis);
+/// 2D array of mel-spectrogram features (time_steps, n_mels)
+fn mel_spectrogram(audio: &[f32], config: &MelSpectrogram) -> Array2<f32> {
+    let audio = apply_preemphasis(audio, config.preemphasis);
 
     let spectrogram = stft(&audio, config.n_fft, config.hop_length, config.win_length);
 
-    let mel_filterbank =
-        create_mel_filterbank(config.n_fft, config.feature_size, config.sampling_rate);
+    let mel_filterbank = create_mel_filterbank(config.n_fft, config.n_mels, config.sample_rate);
     let mel_spectrogram = mel_filterbank.dot(&spectrogram);
     let mel_spectrogram = mel_spectrogram.mapv(|x| (x.max(1e-10)).ln());
 
@@ -267,7 +247,7 @@ pub fn extract_features(
         }
     }
 
-    Ok(mel_spectrogram)
+    mel_spectrogram
 }
 
 #[cfg(test)]

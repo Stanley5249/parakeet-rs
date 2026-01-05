@@ -15,10 +15,6 @@ pub enum Error {
     #[error(transparent)]
     Audio(#[from] AudioError),
 
-    /// Preprocessing stage error
-    #[error(transparent)]
-    Preprocessing(#[from] PreprocessingError),
-
     /// Model inference stage error
     #[error(transparent)]
     Model(#[from] ModelError),
@@ -62,18 +58,6 @@ pub enum AudioError {
     /// WAV file format error
     #[error(transparent)]
     Hound(#[from] hound::Error),
-}
-
-/// Preprocessing errors (STFT, mel spectrogram, normalization).
-#[derive(Debug, Error)]
-pub enum PreprocessingError {
-    /// Sample rate mismatch between audio and config
-    #[error("sample rate mismatch: expected {expected}Hz, got {got}Hz")]
-    SampleRateMismatch { expected: u32, got: u32 },
-
-    /// Empty audio input
-    #[error("empty audio input")]
-    EmptyAudio,
 }
 
 /// Model inference errors (ONNX, ndarray operations).

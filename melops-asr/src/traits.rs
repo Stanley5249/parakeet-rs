@@ -3,34 +3,14 @@
 //! This module defines the trait hierarchy for building extensible ASR pipelines.
 //! Each trait represents a distinct stage in the transcription process:
 //!
-//! - [`AudioPreprocessor`]: Converts raw audio to model-specific features
 //! - [`AsrModel`]: Runs inference on features to produce model output
 //! - [`Detokenizer`]: Converts model output to human-readable transcription
 
-use crate::audio::SAMPLE_RATE;
+use crate::audio::{MelSpectrogram, SAMPLE_RATE};
 use crate::chunk::ChunkConfig;
 use crate::error::Result;
 use crate::types::{Token, Transcription};
-
-/// Preprocesses raw audio into model-specific features.
-///
-/// Implementations handle audio normalization, feature extraction (e.g., mel spectrograms),
-/// and any model-specific transformations required before inference.
-pub trait AudioPreprocessor {
-    /// The feature type produced by this preprocessor.
-    type Features;
-
-    /// Extract features from audio samples.
-    ///
-    /// # Arguments
-    ///
-    /// * `audio` - 16kHz mono audio samples (f32 slice)
-    ///
-    /// # Returns
-    ///
-    /// Model-specific features ready for inference
-    fn preprocess(&self, audio: &[f32]) -> Result<Self::Features>;
-}
+use ndarray::Array2;
 
 /// ASR model that performs inference on preprocessed features.
 ///
@@ -90,37 +70,36 @@ pub trait Detokenizer {
     fn build_transcription(tokens: Vec<Token>) -> Transcription;
 }
 
-/// A complete ASR pipeline combining preprocessor, model, and detokenizer.
+/// A complete ASR pipeline combining mel-spectrogram extraction, model, and detokenizer.
 ///
 /// The pipeline ensures type compatibility between components at compile time
 /// through associated type constraints.
-pub struct AsrPipeline<P, M, D> {
-    /// Audio preprocessor
-    pub preprocessor: P,
+pub struct AsrPipeline<M, D> {
+    /// Mel-spectrogram extractor
+    pub mel: MelSpectrogram,
     /// ASR model
     pub model: M,
     /// Output detokenizer
     pub detokenizer: D,
 }
 
-impl<P, M, D> AsrPipeline<P, M, D>
+impl<M, D> AsrPipeline<M, D>
 where
-    P: AudioPreprocessor,
-    M: AsrModel<Features = P::Features>,
+    M: AsrModel<Features = Array2<f32>>,
     D: Detokenizer<Input = M::Output>,
 {
     /// Create a new pipeline from components.
-    pub fn new(preprocessor: P, model: M, detokenizer: D) -> Self {
+    pub fn new(mel: MelSpectrogram, model: M, detokenizer: D) -> Self {
         Self {
-            preprocessor,
+            mel,
             model,
             detokenizer,
         }
     }
 
     /// Internal token generation with offset adjustment.
-    fn transcribe_with_offset(&mut self, data: &[f32], offset_sec: f32) -> Result<Vec<Token>> {
-        let features = self.preprocessor.preprocess(data)?;
+    fn transcribe_with_offset(&mut self, audio: &[f32], offset_sec: f32) -> Result<Vec<Token>> {
+        let features = self.mel.apply(audio);
         let output = self.model.forward(features)?;
         let tokens = self.detokenizer.decode(&output)?;
 
@@ -137,7 +116,7 @@ where
 
     /// Transcribe audio samples, returning tokens.
     ///
-    /// Runs: preprocess → model → detokenize
+    /// Runs: mel-spectrogram extraction → model inference → detokenize
     ///
     /// Use `Detokenizer::build_transcription()` to convert tokens to transcription.
     pub fn transcribe(&mut self, audio: &[f32]) -> Result<Vec<Token>> {
@@ -149,12 +128,12 @@ where
     /// Splits audio into overlapping chunks, transcribes each, and merges results.
     ///
     /// Use `Detokenizer::build_transcription()` to convert tokens to transcription.
-    pub fn transcribe_chunked(&mut self, data: &[f32], config: ChunkConfig) -> Result<Vec<Token>> {
+    pub fn transcribe_chunked(&mut self, audio: &[f32], config: ChunkConfig) -> Result<Vec<Token>> {
         let token_chunks: Result<Vec<_>> = config
-            .iter_ranges(data.len())
+            .iter_ranges(audio.len())
             .enumerate()
             .map(|(i, (range, offset_sec))| {
-                let chunk = &data[range];
+                let chunk = &audio[range];
                 let duration_sec = chunk.len() as f32 / SAMPLE_RATE as f32;
 
                 tracing::debug!(
@@ -177,7 +156,7 @@ where
     #[allow(unused_variables)]
     pub fn transcribe_stream(
         &mut self,
-        data: impl Iterator<Item = f32>,
+        audio: impl Iterator<Item = f32>,
         config: ChunkConfig,
     ) -> Result<Vec<Token>> {
         todo!()

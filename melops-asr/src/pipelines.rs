@@ -1,8 +1,8 @@
 //! High-level ASR pipelines.
 
+use crate::audio::MelSpectrogram;
 use crate::detokenizer::SentencePieceDetokenizer;
 use crate::models::tdt::TdtModel;
-use crate::preprocessor::ParakeetPreprocessor;
 use crate::traits::AsrPipeline;
 use eyre::{ContextCompat, OptionExt, Result, WrapErr, eyre};
 use hf_hub::CacheRepo;
@@ -55,7 +55,7 @@ impl ModelRepo {
 ///
 /// Wraps the TDT (Token-and-Duration Transducer) model for ASR with timestamps.
 /// Uses the generic `AsrPipeline` for chunking and streaming.
-pub type ParakeetTdt = AsrPipeline<ParakeetPreprocessor, TdtModel, SentencePieceDetokenizer>;
+pub type ParakeetTdt = AsrPipeline<TdtModel, SentencePieceDetokenizer>;
 
 impl ParakeetTdt {
     /// Load TDT pipeline from a model repository.
@@ -90,9 +90,6 @@ impl ParakeetTdt {
             .commit_from_file(&decoder_path)
             .wrap_err("failed to load decoder session")?;
 
-        // Load preprocessor and detokenizer
-        let preprocessor = ParakeetPreprocessor::tdt();
-
         // Boxed dyn error does not implement the Error trait
         // https://deepwiki.com/search/how-to-convert-box-dyn-error-i_e1d11897-6026-4438-9785-1997b61beccf
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
@@ -104,13 +101,13 @@ impl ParakeetTdt {
 
         let detokenizer = SentencePieceDetokenizer::for_tdt(
             tokenizer,
-            preprocessor.config().hop_length,
-            preprocessor.config().sampling_rate,
+            MelSpectrogram::TDT.hop_length,
+            MelSpectrogram::TDT.sample_rate,
         );
 
         // Create model from sessions
         let model = TdtModel::new(encoder_session, decoder_session, detokenizer.vocab_size());
 
-        Ok(AsrPipeline::new(preprocessor, model, detokenizer))
+        Ok(AsrPipeline::new(MelSpectrogram::TDT, model, detokenizer))
     }
 }
