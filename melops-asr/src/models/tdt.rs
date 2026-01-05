@@ -1,7 +1,7 @@
 //! TDT (Token-and-Duration Transducer) model implementation.
 
 use crate::detokenizer::TokenDuration;
-use crate::error::{Error, Result};
+use crate::error::{ModelError, Result};
 use crate::traits::AsrModel;
 use ndarray::{Array1, Array2, Array3, ArrayViewD, Axis, Ix1, Ix3};
 use ndarray_stats::QuantileExt;
@@ -49,27 +49,29 @@ impl TdtModel {
 
         let mut outputs = self.encoder.run(input_value)?;
 
-        let encoder_outputs = outputs
-            .remove("outputs")
-            .ok_or_else(|| Error::Model("missing outputs".into()))?;
+        let encoder_outputs =
+            outputs
+                .remove("outputs")
+                .ok_or_else(|| ModelError::MissingOutput {
+                    name: "outputs".to_string(),
+                })?;
 
-        let encoded_lengths = outputs
-            .remove("encoded_lengths")
-            .ok_or_else(|| Error::Model("missing encoded_lengths".into()))?;
+        let encoded_lengths =
+            outputs
+                .remove("encoded_lengths")
+                .ok_or_else(|| ModelError::MissingOutput {
+                    name: "encoded_lengths".to_string(),
+                })?;
 
         let encoder_outputs = encoder_outputs
-            .try_extract_array()
-            .map_err(|e| Error::Model(format!("failed to extract encoder output: {e}")))?
+            .try_extract_array()?
             .to_owned()
-            .into_dimensionality::<Ix3>()
-            .map_err(|e| Error::Model(format!("expected 3D encoder output: {e}")))?;
+            .into_dimensionality::<Ix3>()?;
 
         let encoded_lengths = encoded_lengths
-            .try_extract_array()
-            .map_err(|e| Error::Model(format!("failed to extract encoder lengths: {e}")))?
+            .try_extract_array()?
             .to_owned()
-            .into_dimensionality::<Ix1>()
-            .map_err(|e| Error::Model(format!("expected 1D encoder lengths: {e}")))?;
+            .into_dimensionality::<Ix1>()?;
 
         Ok((encoder_outputs, encoded_lengths[0]))
     }
@@ -114,35 +116,36 @@ impl TdtModel {
                         "input_states_2" => &states_2
                     ))?;
 
-                    let logits_view: ArrayViewD<f32> = outputs["outputs"]
-                        .try_extract_array()
-                        .map_err(|e| Error::Model(format!("failed to extract logits: {e}")))?;
+                    let logits_view: ArrayViewD<f32> = outputs["outputs"].try_extract_array()?;
 
                     let logits_flat = logits_view.flatten();
 
                     // Decoder outputs: [vocab_0..vocab_n, blank, duration_0..duration_4]
                     let text_logits = logits_flat.slice_axis(Axis(0), (0..blank_id + 1).into());
-                    let token_id = text_logits.argmax().map_err(|e| {
-                        Error::Model(format!("failed to compute argmax for text logits: {e}"))
-                    })?;
+                    let token_id = text_logits.argmax()?;
 
                     let duration_logits = logits_flat.slice_axis(Axis(0), (blank_id + 1..).into());
-                    let duration_idx = duration_logits.argmax().map_err(|e| {
-                        Error::Model(format!("failed to compute argmax for duration logits: {e}"))
-                    })?;
+                    let duration_idx = duration_logits.argmax()?;
 
                     let skip = self.durations.get(duration_idx).copied().ok_or_else(|| {
-                        Error::Model(format!("duration index {duration_idx} out of bounds"))
+                        ModelError::DurationIndexOutOfBounds {
+                            index: duration_idx,
+                            max: self.durations.len() - 1,
+                        }
                     })?;
 
                     if token_id != blank_id {
                         // Update LSTM states for next token prediction
-                        states_1 = outputs
-                            .remove("output_states_1")
-                            .ok_or_else(|| Error::Model("missing output_states_1".into()))?;
-                        states_2 = outputs
-                            .remove("output_states_2")
-                            .ok_or_else(|| Error::Model("missing output_states_2".into()))?;
+                        states_1 = outputs.remove("output_states_1").ok_or_else(|| {
+                            ModelError::MissingOutput {
+                                name: "output_states_1".to_string(),
+                            }
+                        })?;
+                        states_2 = outputs.remove("output_states_2").ok_or_else(|| {
+                            ModelError::MissingOutput {
+                                name: "output_states_2".to_string(),
+                            }
+                        })?;
 
                         tokens.push(TokenDuration {
                             token_id,

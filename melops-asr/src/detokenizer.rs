@@ -1,6 +1,6 @@
 //! Detokenizer for converting model output to transcriptions.
 
-use crate::error::{Error, Result};
+use crate::error::{DetokenizationError, Result};
 use crate::traits::Detokenizer;
 use crate::types::{Token, Transcription};
 use tokenizers::Tokenizer;
@@ -105,7 +105,7 @@ impl Detokenizer for SentencePieceDetokenizer {
             let token_text = self
                 .tokenizer
                 .id_to_token(td.token_id as u32)
-                .ok_or(Error::InvalidTokenId(td.token_id))?;
+                .ok_or(DetokenizationError::InvalidTokenId(td.token_id))?;
 
             let start = self.frame_to_timestamp(td.frame_index);
             let end = if let Some(next) = input.get(i + 1) {

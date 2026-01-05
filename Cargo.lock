@@ -1215,7 +1215,7 @@ dependencies = [
  "ndarray",
  "ndarray-stats",
  "ort",
- "parakeet-rs",
+ "rustfft",
  "thiserror",
  "tokenizers",
  "tracing",

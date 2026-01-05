@@ -1,50 +1,160 @@
-//! Error types for melops-asr
+//! Error types for melops-asr organized by processing stage.
 
+use ndarray::ShapeError;
+use ndarray_stats::errors::{MinMaxError, QuantileError};
 use thiserror::Error;
 
-/// ASR pipeline error variants
+/// ASR pipeline error variants organized by processing stage.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Audio sample rate validation failed
+    /// Configuration stage error
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+
+    /// Audio loading stage error
+    #[error(transparent)]
+    Audio(#[from] AudioError),
+
+    /// Preprocessing stage error
+    #[error(transparent)]
+    Preprocessing(#[from] PreprocessingError),
+
+    /// Model inference stage error
+    #[error(transparent)]
+    Model(#[from] ModelError),
+
+    /// Detokenization stage error
+    #[error(transparent)]
+    Detokenization(#[from] DetokenizationError),
+}
+
+/// Configuration errors (chunking, model loading, etc.).
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    /// Invalid chunk duration
+    #[error("invalid chunk duration: {duration}s (minimum {min}s)")]
+    InvalidChunkDuration { duration: f32, min: f32 },
+
+    /// Invalid chunk overlap
+    #[error("invalid chunk overlap: {overlap}s exceeds duration {duration}s")]
+    InvalidChunkOverlap { overlap: f32, duration: f32 },
+
+    /// Model file not found
+    #[error("model file not found: {0}")]
+    ModelNotFound(String),
+}
+
+/// Audio loading and validation errors.
+#[derive(Debug, Error)]
+pub enum AudioError {
+    /// Sample rate validation failed
     #[error("invalid sample rate: expected {expected}Hz, got {got}Hz")]
     InvalidSampleRate { expected: u32, got: u32 },
 
-    /// Audio channel validation failed
-    #[error("invalid audio channels: expected mono or stereo, got {0} channels")]
+    /// Channel count validation failed
+    #[error("invalid channel count: expected mono or stereo, got {0} channels")]
     InvalidChannels(u16),
 
-    /// Model inference error
-    #[error("model error: {0}")]
-    Model(String),
+    /// IO error during audio loading
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
-    /// Audio preprocessing error
-    #[error("preprocessing error: {0}")]
-    Preprocessing(String),
+    /// WAV file format error
+    #[error(transparent)]
+    Hound(#[from] hound::Error),
+}
 
-    /// Audio chunking error
-    #[error("chunking error: {0}")]
-    Chunking(String),
+/// Preprocessing errors (STFT, mel spectrogram, normalization).
+#[derive(Debug, Error)]
+pub enum PreprocessingError {
+    /// Sample rate mismatch between audio and config
+    #[error("sample rate mismatch: expected {expected}Hz, got {got}Hz")]
+    SampleRateMismatch { expected: u32, got: u32 },
 
-    /// Detokenization error
-    #[error("detokenization error: invalid token ID {0}")]
-    InvalidTokenId(usize),
+    /// Empty audio input
+    #[error("empty audio input")]
+    EmptyAudio,
+}
+
+/// Model inference errors (ONNX, ndarray operations).
+#[derive(Debug, Error)]
+pub enum ModelError {
+    /// Missing expected output tensor
+    #[error("missing model output: {name}")]
+    MissingOutput { name: String },
+
+    /// Duration index out of bounds
+    #[error("duration index {index} out of bounds (max {max})")]
+    DurationIndexOutOfBounds { index: usize, max: usize },
 
     /// ONNX Runtime error
     #[error(transparent)]
     Ort(#[from] ort::Error),
 
-    /// IO error
+    /// ndarray shape error
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Shape(#[from] ShapeError),
 
-    /// WAV file error
+    /// ndarray-stats min/max error
     #[error(transparent)]
-    Hound(#[from] hound::Error),
+    MinMax(#[from] MinMaxError),
 
-    /// Upstream parakeet-rs error
+    /// ndarray-stats quantile error
     #[error(transparent)]
-    ParakeetRs(#[from] parakeet_rs::Error),
+    Quantile(#[from] QuantileError),
 }
 
-/// Result type alias for melops-asr operations
+/// Detokenization errors.
+#[derive(Debug, Error)]
+pub enum DetokenizationError {
+    /// Token ID not found in vocabulary
+    #[error("invalid token ID: {0}")]
+    InvalidTokenId(usize),
+}
+
+/// Result type alias for melops-asr operations.
 pub type Result<T> = std::result::Result<T, Error>;
+
+// Nested From implementations for automatic error conversion chains
+
+// hound::Error → AudioError → Error
+impl From<hound::Error> for Error {
+    fn from(e: hound::Error) -> Self {
+        Error::Audio(AudioError::Hound(e))
+    }
+}
+
+// std::io::Error → AudioError → Error
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::Audio(AudioError::Io(e))
+    }
+}
+
+// ort::Error → ModelError → Error
+impl From<ort::Error> for Error {
+    fn from(e: ort::Error) -> Self {
+        Error::Model(ModelError::Ort(e))
+    }
+}
+
+// ShapeError → ModelError → Error
+impl From<ShapeError> for Error {
+    fn from(e: ShapeError) -> Self {
+        Error::Model(ModelError::Shape(e))
+    }
+}
+
+// MinMaxError → ModelError → Error
+impl From<MinMaxError> for Error {
+    fn from(e: MinMaxError) -> Self {
+        Error::Model(ModelError::MinMax(e))
+    }
+}
+
+// QuantileError → ModelError → Error
+impl From<QuantileError> for Error {
+    fn from(e: QuantileError) -> Self {
+        Error::Model(ModelError::Quantile(e))
+    }
+}
