@@ -19,9 +19,9 @@ pub enum Error {
     #[error(transparent)]
     Model(#[from] ModelError),
 
-    /// Detokenization stage error
+    /// Tokenizer error
     #[error(transparent)]
-    Detokenization(#[from] DetokenizationError),
+    Tokenizers(tokenizers::Error),
 }
 
 /// Configuration errors (chunking, model loading, etc.).
@@ -86,14 +86,6 @@ pub enum ModelError {
     /// ndarray-stats quantile error
     #[error(transparent)]
     Quantile(#[from] QuantileError),
-}
-
-/// Detokenization errors.
-#[derive(Debug, Error)]
-pub enum DetokenizationError {
-    /// Token ID not found in vocabulary
-    #[error("invalid token ID: {0}")]
-    InvalidTokenId(usize),
 }
 
 /// Result type alias for melops-asr operations.

@@ -1,6 +1,6 @@
 //! AsrModel trait implementation for TdtModel.
 
-use crate::error::{DetokenizationError, Result};
+use crate::error::{Error, Result};
 use crate::models::tdt::core::TdtModel;
 use crate::models::tdt::detokenizer::TokenDuration;
 use crate::traits::AsrModel;
@@ -29,24 +29,22 @@ impl AsrModel for TdtModel {
 
     /// Convert token-duration sequence to text segments with timestamps.
     fn to_segments(&self, token_durations: &[TokenDuration]) -> Result<Vec<Segment>> {
-        let mut segments = Vec::with_capacity(token_durations.len());
+        let mut stream = self.detokenizer.tokenizer.decode_stream(true);
 
-        for td in token_durations {
-            let text = self
-                .detokenizer
-                .tokenizer
-                .id_to_token(td.token_id as u32)
-                .ok_or(DetokenizationError::InvalidTokenId(td.token_id))?;
+        let output_to_segment = |td: &TokenDuration| match stream.step(td.token_id as u32) {
+            Ok(Some(text)) => Some(Ok(Segment {
+                text,
+                start: self.frame_to_secs(td.frame_index),
+                end: self.frame_to_secs(td.frame_index + td.duration),
+            })),
+            Ok(None) => None,
+            Err(e) => Some(Err(Error::Tokenizers(e))),
+        };
 
-            let start = self.frame_to_secs(td.frame_index);
-            let end = self.frame_to_secs(td.frame_index + td.duration);
-
-            let text = text.replace('▁', " ");
-
-            segments.push(Segment { text, start, end });
-        }
-
-        Ok(segments)
+        token_durations
+            .iter()
+            .filter_map(output_to_segment)
+            .collect()
     }
 
     /// Offset frame indices in token-duration sequence for chunked processing.
