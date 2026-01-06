@@ -7,7 +7,7 @@ use crate::cli::{ModelArgs, ModelSource};
 use eyre::Result;
 use hf_hub::Cache;
 use hf_hub::api::sync::Api;
-use melops_asr::pipelines::ModelRepo;
+use melops_asr::types::ModelRepo;
 use std::path::PathBuf;
 
 /// Resolved model configuration.

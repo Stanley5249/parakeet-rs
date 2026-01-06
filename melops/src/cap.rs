@@ -7,7 +7,8 @@ use clap::Args;
 use eyre::{Context, Result};
 use melops_asr::audio::read_audio_mono;
 use melops_asr::chunk::ChunkConfig;
-use melops_asr::models::tdt::TdtModel;
+use melops_asr::models::tdt::core::TdtModel;
+use melops_asr::traits::AsrModel;
 #[allow(unused_imports)]
 use ort::execution_providers::*;
 use ort::session::Session;
@@ -108,14 +109,14 @@ fn caption_from_wav_file(
 
     let s = Instant::now();
 
-    let tokens = model
+    let segments = model
         .transcribe_chunked(&audio, chunk_config)
         .wrap_err("transcription failed")?;
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "inference completed");
 
-    let subtitles = srt::to_subtitles(&tokens);
+    let subtitles = srt::to_subtitles(&segments);
 
     Ok(subtitles)
 }

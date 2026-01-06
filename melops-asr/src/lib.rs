@@ -33,9 +33,7 @@
 
 pub mod audio;
 pub mod chunk;
-pub mod detokenizer;
 pub mod error;
 pub mod models;
-pub mod pipelines;
 pub mod traits;
 pub mod types;

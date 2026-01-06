@@ -2,8 +2,7 @@
 
 use crate::chunk::ChunkConfig;
 use crate::error::Result;
-use crate::models::tdt::TdtModel;
-use crate::types::Token;
+use crate::types::Segment;
 
 /// ASR model that performs inference on preprocessed features.
 ///
@@ -11,39 +10,45 @@ use crate::types::Token;
 /// while providing a uniform interface for the pipeline.
 pub trait AsrModel {
     /// Output type from model inference.
+    ///
+    /// Represents a single unit of model output (e.g., a token with timing).
+    /// The `forward` method returns `Vec<Self::Output>`, a sequence of these items.
     type Output;
 
-    /// Run inference on the given audio.
-    ///
-    /// Note: Takes `&mut self` because ONNX Runtime's Session::run requires it.
-    fn forward(&mut self, audio: &[f32]) -> Result<Self::Output>;
-
-    /// Apply frame offset to model output.
-    ///
-    /// Used for chunked transcription where frame indices need to be offset
-    /// to represent absolute positions in the full audio.
-    fn offset_output(output: &mut Self::Output, frame_offset: usize);
-
     /// Convert frame index to seconds.
-    ///
-    /// The conversion depends on the model's subsampling factor and mel-spectrogram hop length.
     fn frame_to_secs(&self, frame: usize) -> f32;
 
     /// Convert seconds to frame index.
-    ///
-    /// The conversion depends on the model's subsampling factor and mel-spectrogram hop length.
     fn secs_to_frame(&self, secs: f32) -> usize;
-}
 
-impl TdtModel {
-    /// Transcribe audio samples, returning tokens.
-    pub fn transcribe(&mut self, audio: &[f32]) -> Result<Vec<Token>> {
-        let token_durations = self.forward(audio)?;
-        self.decode(&token_durations)
+    /// Run inference on the given audio, returning a sequence of output items.
+    ///
+    /// Returns `Vec<Self::Output>` where each item represents a decoded unit
+    /// (e.g., token with timing information).
+    ///
+    /// Note: Takes `&mut self` because ONNX Runtime's Session::run requires it.
+    fn forward(&mut self, audio: &[f32]) -> Result<Vec<Self::Output>>;
+
+    /// Convert a sequence of model outputs to text segments with timestamps.
+    fn to_segments(&self, output: &[Self::Output]) -> Result<Vec<Segment>>;
+
+    /// Apply frame offset to a sequence of model outputs.
+    ///
+    /// Used for chunked transcription where frame indices need to be offset
+    /// to represent absolute positions in the full audio.
+    fn offset_outputs(output: &mut [Self::Output], frame_offset: usize);
+
+    /// Merge output sequences from multiple chunks into a single sequence.
+    fn merge_outputs(chunks: impl IntoIterator<Item = Vec<Self::Output>>) -> Vec<Self::Output>;
+
+    /// Transcribe audio samples, returning segments.
+    fn transcribe(&mut self, audio: &[f32]) -> Result<Vec<Segment>> {
+        let output = self.forward(audio)?;
+        self.to_segments(&output)
     }
 
-    /// Transcribe audio with automatic chunking, returning merged tokens.
-    pub fn transcribe_chunked(&mut self, audio: &[f32], config: ChunkConfig) -> Result<Vec<Token>> {
+    /// Transcribe audio with automatic chunking, returning merged segments.
+    fn transcribe_chunked(&mut self, audio: &[f32], config: ChunkConfig) -> Result<Vec<Segment>> {
         use crate::audio::SAMPLE_RATE;
 
         let output_chunks: Result<Vec<_>> = config
@@ -57,23 +62,23 @@ impl TdtModel {
 
                 let frame_offset = self.secs_to_frame(offset_sec);
                 let mut output = self.forward(chunk)?;
-                Self::offset_output(&mut output, frame_offset);
+                Self::offset_outputs(&mut output, frame_offset);
 
                 Ok(output)
             })
             .collect();
 
         let merged_output = Self::merge_outputs(output_chunks?);
-        self.decode(&merged_output)
+        self.to_segments(&merged_output)
     }
 
-    /// Transcribe audio from an iterator stream, returning merged tokens.
+    /// Transcribe audio from an iterator stream, returning merged segments.
     #[allow(unused_variables)]
-    pub fn transcribe_stream(
+    fn transcribe_stream(
         &mut self,
         audio: impl Iterator<Item = f32>,
         config: ChunkConfig,
-    ) -> Result<Vec<Token>> {
+    ) -> Result<Vec<Segment>> {
         todo!()
     }
 }

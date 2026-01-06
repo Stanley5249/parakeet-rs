@@ -45,6 +45,27 @@ impl MelSpectrogram {
     pub fn apply(&self, audio: &[f32]) -> Array2<f32> {
         mel_spectrogram(audio, self)
     }
+
+    /// Convert frame index to seconds.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame index in encoder output
+    /// * `subsampling_factor` - Encoder subsampling factor (e.g., 8x for TDT)
+    pub fn frame_to_secs(&self, frame: usize, subsampling_factor: usize) -> f32 {
+        (frame * subsampling_factor * self.hop_length) as f32 / self.sample_rate as f32
+    }
+
+    /// Convert seconds to frame index.
+    ///
+    /// # Arguments
+    ///
+    /// * `secs` - Time in seconds
+    /// * `subsampling_factor` - Encoder subsampling factor (e.g., 8x for TDT)
+    pub fn secs_to_frame(&self, secs: f32, subsampling_factor: usize) -> usize {
+        let samples = (secs * self.sample_rate as f32) as usize;
+        samples / (subsampling_factor * self.hop_length)
+    }
 }
 
 /// Load audio from a WAV file.

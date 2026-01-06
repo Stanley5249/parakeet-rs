@@ -1,16 +1,57 @@
 //! Core types for melops-asr
 
-/// Token with timestamp information (start and end in seconds)
-#[derive(Debug, Clone)]
-pub struct Token {
+use eyre::{ContextCompat, Result, WrapErr};
+use hf_hub::CacheRepo;
+use hf_hub::api::sync::ApiRepo;
+use std::path::PathBuf;
+
+/// Text segment with timestamps.
+///
+/// Represents a portion of transcribed text with start and end times in seconds.
+#[derive(Clone, Debug)]
+pub struct Segment {
+    /// Transcribed text
     pub text: String,
+    /// Start time in seconds
     pub start: f32,
+    /// End time in seconds
     pub end: f32,
 }
 
-/// Transcription result with text and timestamped tokens
-#[derive(Debug, Clone)]
-pub struct Transcription {
-    pub text: String,
-    pub tokens: Vec<Token>,
+/// Model repository sources.
+#[derive(Debug)]
+pub enum ModelRepo {
+    /// Local filesystem path
+    Path(PathBuf),
+    /// HuggingFace cache repository
+    Cache(CacheRepo),
+    /// HuggingFace API repository
+    Api(ApiRepo),
+}
+
+impl ModelRepo {
+    /// Resolve a file name to its full path in this repository.
+    pub fn resolve(&self, file_name: &str) -> Result<PathBuf> {
+        match self {
+            ModelRepo::Path(path) => path
+                .join(file_name)
+                .canonicalize()
+                .wrap_err(format!("failed to resolve model: {file_name}")),
+            ModelRepo::Cache(cache_repo) => cache_repo
+                .get(file_name)
+                .wrap_err(format!("failed to download from cache: {file_name}")),
+            ModelRepo::Api(api_repo) => api_repo
+                .get(file_name)
+                .wrap_err(format!("failed to download from api: {file_name}")),
+        }
+    }
+
+    /// Try resolving multiple file names, return first successful match.
+    pub fn resolve_any(&self, candidates: &[&str]) -> Result<PathBuf> {
+        use eyre::OptionExt;
+        candidates
+            .iter()
+            .find_map(|name| self.resolve(name).ok())
+            .ok_or_eyre("no model found from candidates")
+    }
 }
