@@ -2,7 +2,7 @@
 
 use crate::error::{AudioError, Result};
 use hound::{SampleFormat, WavReader, WavSpec};
-use ndarray::Array2;
+use ndarray::prelude::*;
 use std::f32::consts::PI;
 use std::path::Path;
 

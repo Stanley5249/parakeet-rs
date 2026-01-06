@@ -3,7 +3,7 @@
 use crate::error::{ModelError, Result};
 use crate::models::tdt::core::TdtModel;
 use crate::models::tdt::detokenizer::TokenDuration;
-use ndarray::{Array1, Array2, Array3, ArrayViewD, Axis, Ix1, Ix3};
+use ndarray::prelude::*;
 use ndarray_stats::QuantileExt;
 use ort::{inputs, value::Tensor, value::Value};
 
