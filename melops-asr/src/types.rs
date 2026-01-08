@@ -18,6 +18,17 @@ pub struct Segment {
     pub end: f32,
 }
 
+impl Segment {
+    /// Create a new segment
+    pub fn new(text: impl Into<String>, start: f32, end: f32) -> Self {
+        Self {
+            text: text.into(),
+            start,
+            end,
+        }
+    }
+}
+
 /// Model repository sources.
 #[derive(Debug)]
 pub enum ModelRepo {

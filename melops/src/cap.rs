@@ -2,6 +2,7 @@
 
 use crate::cli::{CaptionArgs, ModelArgs};
 use crate::config::ModelConfig;
+use crate::segment::Segmenter;
 use crate::srt::{self, display_subtitles};
 use clap::Args;
 use eyre::{Context, Result};
@@ -115,6 +116,9 @@ fn caption_from_wav_file(
 
     let d = s.elapsed();
     tracing::info!(duration = %format_secs(d.as_secs_f32()), "inference completed");
+
+    // Regroup segments for comfortable speed
+    let segments = Segmenter::COMFORTABLE.regroup(&segments);
 
     let subtitles = srt::to_subtitles(&segments);
 
