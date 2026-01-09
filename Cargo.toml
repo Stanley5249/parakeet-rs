@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["melops", "melops-asr", "melops-dl", "parakeet-rs"]
+members = ["melops", "melops-asr", "melops-dl"]
 
 [workspace.package]
-version = "0.2.6"
+version = "0.1.0"
 edition = "2024"
-authors = ["altunenes"]
-description = "Fast ASR & Speaker Diarization with NVIDIA Parakeet via ONNX"
-repository = "https://github.com/Stanley5249/parakeet-rs"
-license = "MIT OR Apache-2.0"
+authors = ["Stanley5249 <seer852741@gmail.com>"]
+description = "Speech recognition and audio processing workspace"
+repository = "https://github.com/Stanley5249/melops"
+license = "MIT"
 
 [workspace.dependencies]
 melops = { path = "melops" }

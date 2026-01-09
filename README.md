@@ -1,17 +1,19 @@
 # Melops 🦜
 
-Fast audio captioning toolkit with NVIDIA's Parakeet models via ONNX Runtime.
+Fast audio captioning and speech-to-text toolkit with NVIDIA's Parakeet models via ONNX Runtime.
 
-This is a fork of [altunenes/parakeet-rs](https://github.com/altunenes/parakeet-rs), restructured as a Cargo workspace with additional tooling.
+## Origin
+
+This project started as a fork of [altunenes/parakeet-rs](https://github.com/altunenes/parakeet-rs) but evolved into a rewrite focused on captioning workflows. Thanks to the original project for insights into TDT pipeline architecture and ONNX Runtime setup.
 
 ## Workspace Structure
 
 This project is organized as a Cargo workspace:
 
-- `parakeet-rs/` - Core ASR library crate (no execution provider features)
-- `melops/` - CLI binary `mel` with configurable execution provider features
-- `melops-dl/` - Minimal yt-dlp wrapper for downloading and organizing audio by metadata
-- `melops-export/` - Python package for exporting Parakeet models to ONNX
+- `melops/` - CLI tool for audio captioning and speech-to-text
+- `melops-asr/` - ASR library with chunking support for long audio
+- `melops-dl/` - Audio download utility using yt-dlp
+- `melops-export/` - Model export tool (NeMo to ONNX)
 
 ## Quick Start
 

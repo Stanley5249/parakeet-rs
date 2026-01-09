@@ -34,7 +34,7 @@ mel = "cargo run -p melops -F openvino"
 
 [feature.openvino.dependencies]
 libopenvino = ">=2025.4.0,<2025.5.0"
-libopenvino-onnx-frontend  = ">=2025.4.0,<2025.5.0"
+libopenvino-onnx-frontend = ">=2025.4.0,<2025.5.0"
 libopenvino-auto-batch-plugin = ">=2025.4.0,<2025.5.0"
 libopenvino-auto-plugin = ">=2025.4.0,<2025.5.0"
 libopenvino-hetero-plugin = ">=2025.4.0,<2025.5.0"
@@ -56,6 +56,6 @@ melops-export = { path = "melops-export" }
 # Pixi-build does not support conda package depends on pypi package directly.
 [feature.export.pypi-dependencies]
 nemo-toolkit = { version = ">=2.6.0,<2.7", extras = ["asr"] }
-torch = { version = ">=2.8.0,<2.9", index = "https://download.pytorch.org/whl/cpu"}
+torch = { version = ">=2.8.0,<2.9", index = "https://download.pytorch.org/whl/cpu" }
 onnxscript = ">=0.5.0,<0.6"
 tokenizers = ">=0.21.4,<0.22"

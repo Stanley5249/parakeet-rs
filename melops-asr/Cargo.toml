@@ -3,9 +3,11 @@ name = "melops-asr"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "TDT-optimized ASR chunking orchestration for production captioning"
+description = "ASR library for Parakeet models with chunking support for long audio"
 repository.workspace = true
 license.workspace = true
+keywords = ["asr", "parakeet", "onnx", "speech-to-text", "nvidia"]
+categories = ["multimedia::audio", "science"]
 
 [dependencies]
 eyre.workspace = true

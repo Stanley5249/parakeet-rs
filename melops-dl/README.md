@@ -23,4 +23,4 @@ See [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp) for full configurat
 
 ## License
 
-MIT OR Apache-2.0
+MIT

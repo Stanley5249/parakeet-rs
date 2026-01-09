@@ -2,8 +2,11 @@
 name = "melops-dl"
 version.workspace = true
 edition.workspace = true
+authors.workspace = true
+description = "Audio download and organization utility"
 repository.workspace = true
 license.workspace = true
+keywords = ["audio", "download", "youtube", "yt-dlp", "pyo3"]
 
 [features]
 default = []

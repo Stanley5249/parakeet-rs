@@ -5,19 +5,30 @@ build-backend = "uv_build"
 [project]
 name = "melops-export"
 version = "0.1.0"
+description = "Export NVIDIA Parakeet-TDT ASR models to ONNX format"
+authors = [{ name = "Stanley5249", email = "seer852741@gmail.com" }]
+license = { text = "MIT" }
 requires-python = ">=3.12,<3.13"
+keywords = ["asr", "onnx", "parakeet", "nemo"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 dependencies = [
-    "nemo-toolkit[asr]>=2.6.0,<2.7",
-    "torch>=2.8.0,<2.9",
-    "onnxscript>=0.5.0,<0.6",
-    "tokenizers>=0.21.4,<0.22",
+  "nemo-toolkit[asr]>=2.6.0,<2.7",
+  "torch>=2.8.0,<2.9",
+  "onnxscript>=0.5.0,<0.6",
+  "tokenizers>=0.21.4,<0.22",
 ]
 
+[project.urls]
+Repository = "https://github.com/Stanley5249/melops"
+
 [tool.uv]
-environments = [
-    "sys_platform == 'win32'",
-    "sys_platform == 'linux'"
-]
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
